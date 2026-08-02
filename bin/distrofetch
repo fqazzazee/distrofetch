@@ -1,0 +1,109 @@
+#!/usr/bin/env bash
+# distrofetch — matrix-styled system information for Linux.
+#
+# Resolves its library directory from either a source checkout (../lib) or an
+# installed prefix (../lib/distrofetch), so `git clone` and `make install` both work.
+
+set -euo pipefail
+
+DISTROFETCH_VERSION="0.1.0"
+
+die() {
+  printf 'distrofetch: %s\n' "$1" >&2
+  exit 2
+}
+
+# Follow symlinks so a /usr/local/bin/distrofetch -> ../share/... link still finds lib/.
+_self="${BASH_SOURCE[0]}"
+while [ -L "$_self" ]; do
+  _link="$(readlink "$_self")"
+  case "$_link" in
+    /*) _self="$_link" ;;
+    *) _self="$(dirname "$_self")/$_link" ;;
+  esac
+done
+_bindir="$(cd "$(dirname "$_self")" && pwd)"
+
+if [ -d "$_bindir/../lib/distrofetch" ]; then
+  DISTROFETCH_LIB="$(cd "$_bindir/../lib/distrofetch" && pwd)"
+elif [ -d "$_bindir/../lib" ]; then
+  DISTROFETCH_LIB="$(cd "$_bindir/../lib" && pwd)"
+else
+  die "cannot locate library directory relative to $_bindir"
+fi
+readonly DISTROFETCH_LIB DISTROFETCH_VERSION
+
+# shellcheck source=../lib/detect.sh
+. "$DISTROFETCH_LIB/detect.sh"
+# shellcheck source=../lib/render.sh
+. "$DISTROFETCH_LIB/render.sh"
+
+usage() {
+  cat <<EOF
+distrofetch $DISTROFETCH_VERSION — matrix-styled system information
+
+Usage: distrofetch [options]
+
+Options:
+  -n, --no-rain      skip the falling-glyph animation, print the report only
+  -c, --no-color     disable ANSI color (implies --no-rain)
+  -d, --duration N   seconds of rain before the report settles (default: 2)
+  -v, --version      print version and exit
+  -h, --help         print this help and exit
+
+The animation is skipped automatically when stdout is not a terminal, so
+piping or redirecting output is always safe.
+
+Exit status: 0 on success, 2 on a usage error.
+EOF
+}
+
+main() {
+  local rain=1 color=1 duration=2
+
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      -n | --no-rain) rain=0 ;;
+      -c | --no-color)
+        color=0
+        rain=0
+        ;;
+      -d | --duration)
+        [ $# -ge 2 ] || die "--duration needs a value"
+        duration="$2"
+        shift
+        ;;
+      -v | --version)
+        printf '%s\n' "$DISTROFETCH_VERSION"
+        return 0
+        ;;
+      -h | --help)
+        usage
+        return 0
+        ;;
+      --)
+        shift
+        break
+        ;;
+      *) die "unknown option: $1" ;;
+    esac
+    shift
+  done
+
+  case "$duration" in
+    '' | *[!0-9]*) die "--duration must be a whole number of seconds" ;;
+  esac
+
+  # Nothing to animate into if stdout is a pipe, a file, or a CI log.
+  if [ ! -t 1 ]; then
+    rain=0
+  fi
+
+  render_init "$color"
+  if [ "$rain" -eq 1 ]; then
+    render_rain "$duration"
+  fi
+  render_report
+}
+
+main "$@"

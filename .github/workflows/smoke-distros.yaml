@@ -1,0 +1,73 @@
+name: Smoke test (distros)
+
+# Proves distrofetch installs and reports correctly on distros not developed on. This
+# is where /proc layout differences, missing coreutils flags, and — most of all — the
+# three package-manager paths in detect_packages get exercised for real.
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    container: ${{ matrix.image }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: arch
+            image: archlinux:latest
+            bootstrap: pacman -Sy --noconfirm --needed git base-devel coreutils
+            pkgmgr: pacman
+          - name: debian
+            image: debian:stable-slim
+            bootstrap: apt-get update && apt-get install -y --no-install-recommends git ca-certificates make coreutils
+            pkgmgr: dpkg
+          - name: fedora
+            image: fedora:latest
+            bootstrap: dnf -y install git make coreutils
+            pkgmgr: rpm
+    steps:
+      - name: bootstrap
+        run: ${{ matrix.bootstrap }}
+
+      # checkout needs git present, which is why bootstrap runs first.
+      - uses: actions/checkout@v4
+
+      - name: install
+        run: make install PREFIX=/usr/local
+
+      - name: smoke
+        run: |
+          set -euo pipefail
+          # Exercise the installed entry point from outside the source tree, so a
+          # broken lib/ path resolution fails here instead of on a user's machine.
+          cd /
+          distrofetch --version
+          distrofetch --no-color | tee /tmp/report.txt
+
+          # Every field must be populated — "unknown" means a probe fell through.
+          for label in OS: Kernel: Arch: Uptime: Packages: Shell: CPU: Memory:; do
+            grep -q "$label" /tmp/report.txt || { echo "missing field: $label" >&2; exit 1; }
+          done
+          if grep -q 'unknown' /tmp/report.txt; then
+            echo "a probe returned unknown on ${{ matrix.name }}:" >&2
+            grep 'unknown' /tmp/report.txt >&2
+            exit 1
+          fi
+
+          # detect_packages must pick the right backend for this distro.
+          grep -q '(${{ matrix.pkgmgr }})' /tmp/report.txt \
+            || { echo "expected ${{ matrix.pkgmgr }} package backend" >&2; exit 1; }

@@ -1,0 +1,18 @@
+# Follow `source`d files so shellcheck can see the detect_* and render_* helpers.
+external-sources=true
+
+# Resolve `# shellcheck source=` paths relative to the script being checked rather than
+# the working directory, so `make lint` works from anywhere in the tree.
+source-path=SCRIPTDIR
+
+# Default shell for lib/*.sh, which are sourced rather than executed.
+shell=bash
+
+# Do NOT blanket-disable these; they catch real bugs:
+#   SC2086  unquoted variable — word splitting
+#   SC2046  unquoted command substitution
+#   SC2155  declare and assign separately, or the exit status is lost
+# Suppress them per-line with a `# shellcheck disable=` comment and a reason.
+#
+# SC1091 is not disabled globally: every source in this repo resolves locally except
+# /etc/os-release, which carries its own inline disable in lib/detect.sh.

@@ -1,0 +1,26 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+[*.{yml,yaml}]
+indent_size = 2
+
+# Matches shfmt -i 2. bin/distrofetch is extensionless, so it is listed by name.
+[*.{sh,bash,bats}]
+indent_size = 2
+
+[bin/distrofetch]
+indent_size = 2
+
+[Makefile]
+indent_style = tab
+
+# Markdown uses trailing double-space for hard line breaks.
+[*.md]
+trim_trailing_whitespace = false

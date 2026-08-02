@@ -1,0 +1,64 @@
+name: Bug report
+description: Something does not work the way it should
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Security vulnerabilities do not go here — see
+        [SECURITY.md](../blob/main/SECURITY.md).
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, and what it did instead of what you expected.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: A case someone else can run beats a description of one.
+      placeholder: |
+        1.
+        2.
+        3.
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: report
+    attributes:
+      label: Output of `distrofetch --no-color`
+      description: >
+        The full report. If a probe is the problem, this shows which one. Redact the
+        hostname if you would rather not share it.
+      render: shell
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Output of `distrofetch --version`, or the commit SHA.
+    validations:
+      required: true
+
+  - type: input
+    id: platform
+    attributes:
+      label: Distro, architecture, and bash version
+      placeholder: Fedora 42, x86_64, bash 5.2.32
+    validations:
+      required: true
+
+  - type: input
+    id: terminal
+    attributes:
+      label: Terminal emulator
+      description: Only needed for rendering or animation problems.
+      placeholder: kitty 0.37, TERM=xterm-kitty
