@@ -65,6 +65,20 @@ fresh install and wants the specs without installing a toolchain first.
     online count separately when it differs.
 13. Report clock (current and maximum), cache sizes per level, and the instruction-set
     extensions that change what software will run.
+13a. Report the consumer generation the part belongs to, the year that generation
+    launched, and how many generations behind the newest known generation it is. Name
+    the generation being compared against, never only the count — the count is only as
+    current as the bundled table, and naming the basis is what lets a reader notice the
+    table is stale.
+13b. Take the generation from the brand string where it carries one (`13th Gen`,
+    `Core Ultra`), and from the microarchitecture table otherwise. The string wins:
+    Intel's 13th and 14th Gen desktop parts are the same silicon and share a
+    family/model pair, so the table alone reports every 14th Gen part as a generation
+    older than it is.
+13c. Report a part that is not on the consumer ladder — Xeon Scalable, EPYC — as such,
+    rather than placing it on a ladder it does not sit on.
+13d. Show a vendor mark in the processor panel, dropping it when the panel is too
+    narrow to hold both the mark and the values. A legible fact beats a legible logo.
 14. Report memory used/total and swap used/total, and machine model, board, and firmware
     version with its date.
 15. Report per-module memory size, type, form factor, rated and configured speed, and
@@ -253,6 +267,13 @@ Changing anything in this table is a decision, and gets recorded in `docs/DECISI
 |---|---|---|
 | `lib/data/distro-releases.tsv` | <https://endoflife.date> | Every release and EOL announcement |
 | `lib/data/cpu-arch.tsv` | Intel ARK, AMD product pages | Every new microarchitecture |
+| `lib/data/cpu-generations.tsv` | Intel ARK, AMD product pages | Every new generation |
+
+`cpu-generations.tsv` defines "latest" by its own highest ordinal, so adding a
+generation is one line and every "N behind" recalculates. Nothing hardcodes the newest
+generation. The failure mode of forgetting is therefore an *under*-report, never an
+over-report — and because the dashboard names the generation it compares against, a
+stale basis is visible in the output rather than silent.
 
 Both carry a `Data as of:` line that gets bumped on every refresh. Neither is consulted
 where a live source exists: `SUPPORT_END=` beats the release table, and nothing beats
@@ -274,6 +295,10 @@ on every push. <!-- assumed --> arm64 is expected to work but is not tested.
   file with a width and height budget, or it is not added.
 - **Image protocols for logos.** No sixel, no kitty graphics, no w3m. ASCII only, which
   is also what keeps the column width the same in every locale.
+- **A per-part CPU database.** The tables key on microarchitecture and generation, not
+  on individual SKUs. Knowing that a chip is Raptor Lake, 13th Gen, 2022 is the useful
+  fact; carrying TDP, boost bins, and PCIe lane counts for every part ever sold is a
+  different project with a different maintenance burden.
 - **A configuration file.** Flags only. If a fact is worth showing, it is worth showing
   by default.
 - **GPU, disk, theme, icon, or WM/DE detection.** Every one of these is a pile of
@@ -301,7 +326,13 @@ on every push. <!-- assumed --> arm64 is expected to work but is not tested.
       `unknown`
 - [ ] A rolling release reports no end of life; an expired release reports its overrun;
       an unknown release reports `unknown`
-- [ ] Every bundled logo is pure ASCII, at most 20 rows and 30 columns
+- [ ] Every bundled logo is pure ASCII, at most 20 rows and 30 columns; every vendor
+      mark at most 10 rows and 24 columns
+- [ ] The processor panel names its generation, its year, and its distance from the
+      newest known generation, and names that generation
+- [ ] A 14th Gen part reports as 14th Gen despite sharing a family/model with 13th Gen
+- [ ] A Xeon or EPYC part reports as off-ladder rather than being placed on it
+- [ ] The vendor mark drops out before any processor value clips
 - [ ] `--logo` rejects a path and an unknown name, both before any output
 - [ ] Ctrl-C during the animation restores the cursor and leaves the terminal usable
 - [ ] A 2-second rain in a 200-column terminal stays well under one core

@@ -251,6 +251,13 @@ detect_cpu_vendor_id() {
   printf '%s\n' "$DF_CPU_VENDOR"
 }
 
+# The unmodified brand string. detect_cpu appends a core count; the generation parser
+# needs the string exactly as the CPU reports it.
+detect_cpu_model_name() {
+  _df_cpuinfo_load
+  printf '%s\n' "$DF_CPU_MODEL_NAME"
+}
+
 detect_cpu_family() {
   _df_cpuinfo_load
   printf '%s\n' "$DF_CPU_FAMILY"

@@ -1,13 +1,16 @@
 # CPU microarchitecture lookup, keyed on what /proc/cpuinfo actually reports.
 #
 # Columns, tab-separated:
-#   vendor  family  model  microarchitecture  launched  process
+#   vendor  family  model  microarchitecture  launched  process  gen
 #
 #   vendor  GenuineIntel | AuthenticAMD, matching vendor_id
 #   family  decimal, matching "cpu family"
 #   model   decimal, matching "model"; * matches any model in the family
 #   launched  year the microarchitecture shipped, not the year this part did
 #   process   fab node as marketed
+#   gen     ordinal into cpu-generations.tsv, or - for a part that is not on the
+#           consumer generation ladder (Xeon Scalable, EPYC) or whose microarchitecture
+#           spans two generations without the model number distinguishing them
 #
 # Keying on family/model rather than the marketing string is the whole point: "13th Gen
 # Intel(R) Core(TM) i7-1360P" tells you a generation, 6/186 tells you Raptor Lake, and
@@ -19,50 +22,54 @@
 #
 # * rows are the fallback for a family and must sort after specific models; the lookup
 # takes the first exact match, then the family wildcard.
+#
+# Note Raptor Lake: models 183 and 191 cover both 13th and 14th Gen, because 14th Gen
+# desktop is the same silicon refreshed. The table says 13; the model *string* says
+# "14th Gen" when it is one, and the string wins. See hwdata_cpu_generation.
 
-GenuineIntel	6	42	Sandy Bridge	2011	32 nm
-GenuineIntel	6	58	Ivy Bridge	2012	22 nm
-GenuineIntel	6	60	Haswell	2013	22 nm
-GenuineIntel	6	69	Haswell	2013	22 nm
-GenuineIntel	6	70	Haswell	2013	22 nm
-GenuineIntel	6	61	Broadwell	2014	14 nm
-GenuineIntel	6	71	Broadwell	2014	14 nm
-GenuineIntel	6	78	Skylake	2015	14 nm
-GenuineIntel	6	94	Skylake	2015	14 nm
-GenuineIntel	6	85	Skylake-SP	2017	14 nm
-GenuineIntel	6	142	Kaby Lake	2016	14 nm
-GenuineIntel	6	158	Kaby Lake	2016	14 nm
-GenuineIntel	6	165	Comet Lake	2020	14 nm
-GenuineIntel	6	166	Comet Lake	2020	14 nm
-GenuineIntel	6	125	Ice Lake	2019	10 nm
-GenuineIntel	6	126	Ice Lake	2019	10 nm
-GenuineIntel	6	106	Ice Lake-SP	2021	10 nm
-GenuineIntel	6	140	Tiger Lake	2020	10 nm
-GenuineIntel	6	141	Tiger Lake	2020	10 nm
-GenuineIntel	6	167	Rocket Lake	2021	14 nm
-GenuineIntel	6	151	Alder Lake	2021	Intel 7
-GenuineIntel	6	154	Alder Lake	2021	Intel 7
-GenuineIntel	6	183	Raptor Lake	2022	Intel 7
-GenuineIntel	6	186	Raptor Lake	2023	Intel 7
-GenuineIntel	6	191	Raptor Lake	2023	Intel 7
-GenuineIntel	6	143	Sapphire Rapids	2023	Intel 7
-GenuineIntel	6	207	Emerald Rapids	2023	Intel 7
-GenuineIntel	6	170	Meteor Lake	2023	Intel 4
-GenuineIntel	6	189	Lunar Lake	2024	TSMC N3B
-GenuineIntel	6	198	Arrow Lake	2024	TSMC N3B
+GenuineIntel	6	42	Sandy Bridge	2011	32 nm	2
+GenuineIntel	6	58	Ivy Bridge	2012	22 nm	3
+GenuineIntel	6	60	Haswell	2013	22 nm	4
+GenuineIntel	6	69	Haswell	2013	22 nm	4
+GenuineIntel	6	70	Haswell	2013	22 nm	4
+GenuineIntel	6	61	Broadwell	2014	14 nm	5
+GenuineIntel	6	71	Broadwell	2014	14 nm	5
+GenuineIntel	6	78	Skylake	2015	14 nm	6
+GenuineIntel	6	94	Skylake	2015	14 nm	6
+GenuineIntel	6	85	Skylake-SP	2017	14 nm	-
+GenuineIntel	6	142	Kaby Lake	2016	14 nm	7
+GenuineIntel	6	158	Kaby Lake	2016	14 nm	7
+GenuineIntel	6	165	Comet Lake	2020	14 nm	10
+GenuineIntel	6	166	Comet Lake	2020	14 nm	10
+GenuineIntel	6	125	Ice Lake	2019	10 nm	10
+GenuineIntel	6	126	Ice Lake	2019	10 nm	10
+GenuineIntel	6	106	Ice Lake-SP	2021	10 nm	-
+GenuineIntel	6	140	Tiger Lake	2020	10 nm	11
+GenuineIntel	6	141	Tiger Lake	2020	10 nm	11
+GenuineIntel	6	167	Rocket Lake	2021	14 nm	11
+GenuineIntel	6	151	Alder Lake	2021	Intel 7	12
+GenuineIntel	6	154	Alder Lake	2021	Intel 7	12
+GenuineIntel	6	183	Raptor Lake	2022	Intel 7	13
+GenuineIntel	6	186	Raptor Lake	2023	Intel 7	13
+GenuineIntel	6	191	Raptor Lake	2023	Intel 7	13
+GenuineIntel	6	143	Sapphire Rapids	2023	Intel 7	-
+GenuineIntel	6	207	Emerald Rapids	2023	Intel 7	-
+GenuineIntel	6	170	Meteor Lake	2023	Intel 4	15
+GenuineIntel	6	189	Lunar Lake	2024	TSMC N3B	16
+GenuineIntel	6	198	Arrow Lake	2024	TSMC N3B	16
 
-AuthenticAMD	23	1	Zen	2017	14 nm
-AuthenticAMD	23	8	Zen+	2018	12 nm
-AuthenticAMD	23	24	Zen+	2018	12 nm
-AuthenticAMD	23	49	Zen 2	2019	7 nm
-AuthenticAMD	23	96	Zen 2	2019	7 nm
-AuthenticAMD	23	113	Zen 2	2019	7 nm
-AuthenticAMD	23	144	Zen 2	2020	7 nm
-AuthenticAMD	23	*	Zen family	2017	14-7 nm
-AuthenticAMD	25	1	Zen 3	2020	7 nm
-AuthenticAMD	25	33	Zen 3	2020	7 nm
-AuthenticAMD	25	80	Zen 3	2021	7 nm
-AuthenticAMD	25	97	Zen 4	2022	5 nm
-AuthenticAMD	25	116	Zen 4	2023	4 nm
-AuthenticAMD	25	*	Zen 3/4	2020	7-5 nm
-AuthenticAMD	26	*	Zen 5	2024	4 nm
+AuthenticAMD	23	1	Zen	2017	14 nm	1
+AuthenticAMD	23	8	Zen+	2018	12 nm	2
+AuthenticAMD	23	24	Zen+	2018	12 nm	2
+AuthenticAMD	23	49	Zen 2	2019	7 nm	3
+AuthenticAMD	23	96	Zen 2	2019	7 nm	3
+AuthenticAMD	23	113	Zen 2	2019	7 nm	3
+AuthenticAMD	23	144	Zen 2	2020	7 nm	3
+AuthenticAMD	23	*	Zen family	2017	14-7 nm	-
+AuthenticAMD	25	1	Zen 3 (EPYC Milan)	2020	7 nm	-
+AuthenticAMD	25	33	Zen 3	2020	7 nm	4
+AuthenticAMD	25	80	Zen 3	2021	7 nm	4
+AuthenticAMD	25	97	Zen 4	2022	5 nm	5
+AuthenticAMD	25	116	Zen 4	2023	4 nm	5
+AuthenticAMD	25	*	Zen 3/4	2020	7-5 nm	-
+AuthenticAMD	26	*	Zen 5	2024	4 nm	6

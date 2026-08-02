@@ -18,6 +18,8 @@ Current phase only. See `ROADMAP.md` for the phase and its exit condition.
 
 - [ ] Add Fedora and Arch release dates to `lib/data/distro-releases.tsv`; both report
       `Released: unknown` today
+- [ ] Confirm `cpu-generations.tsv` is current before release — a missing newest row
+      makes every "N generations behind" under-report
 - [ ] Warn when a bundled table's `Data as of:` date is more than a year old
 - [ ] Decide whether `dmidecode` should be preferred when present *and* running as root
 - [ ] Enable private vulnerability reporting in repo settings — SECURITY.md links to it
@@ -33,6 +35,8 @@ Current phase only. See `ROADMAP.md` for the phase and its exit condition.
 - [x] Distribution release date and support status
 - [x] CPU microarchitecture, launch year, process node, cache, clock, features
 - [x] SMBIOS type-17 parser with synthetic fixtures
+- [x] CPU generation, launch year, and distance from the newest known generation
+- [x] Intel/AMD vendor marks in the processor panel
 - [x] Branch protection on `main` requiring all six checks
 
 ## Blocked

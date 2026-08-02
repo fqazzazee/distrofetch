@@ -134,6 +134,135 @@ setup() {
   [ -z "$output" ]
 }
 
+# --- CPU generations -------------------------------------------------------
+
+@test "an explicit generation marker in the brand string is used" {
+  run hwdata_cpu_gen_ordinal "13th Gen Intel(R) Core(TM) i7-1360P" GenuineIntel 6 186
+  [ "$output" = 13 ]
+}
+
+# 13th and 14th Gen desktop are the same silicon, so family/model cannot tell them
+# apart. The brand string can, and must win — otherwise every 14th Gen part reports as
+# one generation older than it is.
+@test "the brand string beats the table where they disagree" {
+  run hwdata_cpu_gen_ordinal "14th Gen Intel(R) Core(TM) i9-14900K" GenuineIntel 6 183
+  [ "$output" = 14 ]
+  # The table's own answer for that family/model is 13.
+  run hwdata_cpu_gen_ordinal "" GenuineIntel 6 183
+  [ "$output" = 13 ]
+}
+
+@test "st, nd, and rd ordinals parse as well as th" {
+  run hwdata_cpu_gen_ordinal "1st Gen Intel Core i7" GenuineIntel 6 999
+  [ "$output" = 1 ]
+  run hwdata_cpu_gen_ordinal "2nd Gen Intel Core i5" GenuineIntel 6 999
+  [ "$output" = 2 ]
+  run hwdata_cpu_gen_ordinal "3rd Gen Intel Core i3" GenuineIntel 6 999
+  [ "$output" = 3 ]
+}
+
+@test "a CPU with no marker falls back to the table" {
+  run hwdata_cpu_gen_ordinal "AMD Ryzen 9 7950X 16-Core Processor" AuthenticAMD 25 97
+  [ "$output" = 5 ]
+}
+
+# Xeon Scalable and EPYC do not sit on the consumer ladder and must produce nothing
+# rather than a number that would be compared against Core or Ryzen generations.
+@test "a server part reports no generation at all" {
+  run hwdata_cpu_gen_ordinal "INTEL(R) XEON(R) PLATINUM 8573C" GenuineIntel 6 207
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+
+  run hwdata_cpu_gen_ordinal "AMD EPYC 7763 64-Core Processor" AuthenticAMD 25 1
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+# EPYC Naples and Ryzen Summit Ridge are both family 23 model 1, so family/model alone
+# cannot tell a server part from a desktop one. A CI runner reported its EPYC 7763 as
+# "Ryzen 5000 (Zen 3)" before the brand string was consulted — a confidently wrong
+# answer about someone's own hardware, which is the worst kind this tool can give.
+@test "the brand string separates EPYC from Ryzen at the same family and model" {
+  run hwdata_cpu_gen_ordinal "AMD EPYC 7551 32-Core Processor" AuthenticAMD 23 1
+  [ -z "$output" ]
+
+  run hwdata_cpu_gen_ordinal "AMD Ryzen 7 1800X Eight-Core Processor" AuthenticAMD 23 1
+  [ "$output" = 1 ]
+}
+
+@test "an unknown CPU reports no generation" {
+  run hwdata_cpu_gen_ordinal "Some Other CPU" NotAVendor 99 1
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "a generation ordinal resolves to a label and a year" {
+  run hwdata_cpu_generation Intel 13
+  [ "$output" = "13th Gen Core|2022" ]
+  run hwdata_cpu_generation AMD 5
+  [[ "$output" == "Ryzen 7000 (Zen 4)|2022" ]]
+}
+
+@test "an out-of-range ordinal resolves to nothing" {
+  run hwdata_cpu_generation Intel 99
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+# The newest row in the table defines "latest" — nothing hardcodes it, so adding a
+# generation is one line. This asserts the derivation, not which generation is newest.
+@test "the latest generation is the table's own maximum ordinal" {
+  local max_intel
+  max_intel="$(grep -c '^Intel	' "$DISTROFETCH_DATA/cpu-generations.tsv")"
+  run hwdata_cpu_latest_generation Intel
+  [ "$status" -eq 0 ]
+  [[ "$output" == "$max_intel|"* ]]
+}
+
+@test "each vendor has its own latest" {
+  run hwdata_cpu_latest_generation Intel
+  local intel="$output"
+  run hwdata_cpu_latest_generation AMD
+  [ "$output" != "$intel" ]
+  [ -n "$output" ]
+}
+
+@test "an unknown vendor has no latest generation" {
+  run hwdata_cpu_latest_generation Motorola
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+# Every gen ordinal used in cpu-arch.tsv must exist in cpu-generations.tsv, or the
+# dashboard reports a generation it cannot name.
+@test "every generation referenced by the CPU table is defined" {
+  local line vendor gen label
+  while IFS=$'\t' read -r vendor _ _ _ _ _ gen; do
+    case "$vendor" in '#'* | '') continue ;; esac
+    [ -n "$gen" ] || continue
+    [ "$gen" = '-' ] && continue
+    case "$vendor" in
+      GenuineIntel) vendor=Intel ;;
+      AuthenticAMD) vendor=AMD ;;
+    esac
+    run hwdata_cpu_generation "$vendor" "$gen"
+    [ -n "$output" ]
+  done < <(grep -v -e '^#' -e '^$' "$DISTROFETCH_DATA/cpu-arch.tsv")
+}
+
+@test "vendor logo names map to files that exist" {
+  local name
+  for name in intel amd generic; do
+    [ -r "$BATS_TEST_DIRNAME/../lib/cpu-logos/$name.txt" ]
+  done
+  run hwdata_cpu_logo_name Intel
+  [ "$output" = intel ]
+  run hwdata_cpu_logo_name AMD
+  [ "$output" = amd ]
+  run hwdata_cpu_logo_name HygonGenuine
+  [ "$output" = generic ]
+}
+
 # --- logo resolution -------------------------------------------------------
 
 @test "a distro with its own logo file uses it" {

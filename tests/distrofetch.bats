@@ -303,6 +303,60 @@ require_utf8() {
   done
 }
 
+# --- processor panel -------------------------------------------------------
+
+@test "the processor panel reports a generation and how current it is" {
+  COLUMNS=140 run "$DF" --no-color
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Generation"* ]]
+  [[ "$output" == *"Currency"* ]]
+}
+
+@test "the vendor logo appears in the processor panel on a wide terminal" {
+  COLUMNS=140 run "$DF" --no-color
+  [ "$status" -eq 0 ]
+  # One of the three bundled marks has to be there.
+  [[ "$output" == *"|_|_| |_|"* || "$output" == *"/_/ \\_\\_|"* || "$output" == *"|CPU|"* ]]
+}
+
+# The logo costs 22 columns inside the panel. Below the threshold every value clips to
+# make room for it, and a legible fact beats a legible logo.
+@test "the vendor logo drops out before the values start clipping" {
+  COLUMNS=64 run "$DF" --no-color
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"PROCESSOR"* ]]
+  [[ "$output" != *"|CPU|"* ]]
+  [[ "$output" != *"|_|_| |_|"* ]]
+  # The panel still carries its facts.
+  [[ "$output" == *"Micro-arch"* ]]
+}
+
+@test "--no-logo removes the vendor logo as well as the distro one" {
+  COLUMNS=140 run "$DF" --no-color --no-logo
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"PROCESSOR"* ]]
+  [[ "$output" != *"|_|_| |_|"* ]]
+  [[ "$output" != *"|CPU|"* ]]
+}
+
+@test "the plain report carries the generation on one line" {
+  run "$DF" --no-art --no-color
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"CPU gen:"* ]]
+}
+
+@test "every bundled vendor logo is pure ASCII and fits the panel gutter" {
+  local f rows cols
+  for f in "$BATS_TEST_DIRNAME"/../lib/cpu-logos/*.txt; do
+    run env LC_ALL=C grep -c '[^ -~]' "$f"
+    [ "$output" -eq 0 ]
+    rows="$(wc -l <"$f")"
+    cols="$(awk '{ if (length($0) > m) m = length($0) } END { print m + 0 }' "$f")"
+    [ "$rows" -le 10 ]
+    [ "$cols" -le 24 ]
+  done
+}
+
 # --- hardware and release facts -------------------------------------------
 
 @test "the dashboard reports a support status for this distro" {

@@ -8,6 +8,58 @@ decision, it is a preference.
 
 ---
 
+## 2026-08-02 — Generation currency, with the comparison basis named
+
+**Status:** accepted
+
+**Context:** The maintainer asked for CPU generation and release year, and for how many
+generations behind the latest a part is. The last of those requires knowing what the
+latest *is*, which is not on the machine and changes roughly annually.
+
+**Decision:** `lib/data/cpu-generations.tsv` lists consumer generations in release order
+with an ordinal, a label, and a year. "Latest" is the table's own highest ordinal for
+that vendor — nothing hardcodes it, so adding a generation is one line and every count
+recalculates. The dashboard prints `3 generations behind Core Ultra Series 2 (2024)`,
+naming the generation compared against, not a bare count.
+
+**Alternatives:** Hardcoding the newest generation — rejected because it puts the fact in
+two places and the code path is the one nobody remembers to update. Printing only the
+count — rejected because the count is silently wrong when the table is stale, and there
+is no way for a reader to tell; naming the basis makes staleness visible in the output.
+Computing generations from release years — rejected because Intel and AMD do not release
+on the same cadence and the answer would be a different question.
+
+**Consequences:** The failure mode of forgetting to refresh is an *under*-report, never
+an over-report, which is the right direction for a claim about how old your hardware is.
+Intel's renaming from "14th Gen" to "Core Ultra Series 1" is absorbed by the ordinal:
+marketing names cannot be subtracted, positions can. Server parts carry `-` and are
+reported as off-ladder rather than being placed on one.
+
+---
+
+## 2026-08-02 — The brand string beats the table for generation
+
+**Status:** accepted
+
+**Context:** Intel's 13th and 14th Gen desktop parts are the same silicon — 14th Gen is
+Raptor Lake refreshed — so they share a `family/model` pair. Every other fact in this
+project is keyed on that pair, precisely because marketing strings are unreliable.
+
+**Decision:** For generation only, parse `Nth Gen` out of the brand string and prefer it
+over the table. Fall back to the table's `gen` column when the string carries no marker,
+which is every AMD part and every pre-Skylake Intel one.
+
+**Alternatives:** Table only — rejected: it reports every 14th Gen part as 13th Gen, and
+being wrong about the user's own hardware is worse than being silent. Splitting the table
+by stepping — rejected; the stepping does distinguish some refreshed parts but not
+reliably, and it would encode a fact that Intel is free to change.
+
+**Consequences:** This is the one place a marketing string is trusted over silicon
+identity, and it is trusted only because it is the *more* specific source here, not the
+less. It inverts the rule stated three entries above, so both are written down.
+
+---
+
 ## 2026-08-02 — Per-distro ASCII logos, reversing a non-goal
 
 **Status:** accepted — supersedes the "no ASCII distro logos" non-goal in SPEC.md

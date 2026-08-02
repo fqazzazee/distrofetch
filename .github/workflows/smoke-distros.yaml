@@ -152,6 +152,24 @@ jobs:
           done < /tmp/flat.txt
           [ -n "$first" ] || { echo "no panel lines found" >&2; exit 1; }
 
+          # --- processor generation -----------------------------------------------
+          # The value is not asserted: these runners are Xeon and EPYC parts, which do
+          # not sit on the consumer generation ladder and correctly report so. What
+          # must hold is that both rows are present and neither says "unknown" where a
+          # sentence belongs.
+          for row in Generation Currency 'Micro-arch' Signature; do
+            grep -q "$row" /tmp/dash.txt \
+              || { echo "processor panel missing row: $row" >&2; exit 1; }
+          done
+
+          # The vendor mark lives in the panel's gutter. Every x86 runner is Intel or
+          # AMD, so one of those two must appear rather than the generic chip.
+          if ! grep -qF -e '|_|_| |_|' -e '/_/ \_\_|' /tmp/dash.txt; then
+            echo "no Intel or AMD mark in the processor panel" >&2
+            sed -n '/PROCESSOR/,/^ *└/p' /tmp/dash.txt >&2
+            exit 1
+          fi
+
           # --- memory modules -----------------------------------------------------
           # Unprivileged runs must explain themselves rather than printing "unknown",
           # which reads as a failed probe. Containers have no SMBIOS access at all.

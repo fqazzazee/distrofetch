@@ -25,24 +25,31 @@ distrofetch 0.1.0                                                               
       /   __)\  │ OS        Fedora Linux 44 (Workstation Edition)      │ │ ID        fedora                                      │
       |  /  \ \ │ Kernel    Linux 7.1.5-201.fc44.x86_64                │ │ Version   44                                          │
    ___|  |__/ / │ Arch      x86_64                                     │ │ Codename  none                                        │
-  / (_    _)_/  │ Uptime    2d 19h 55m                                 │ │ Released  unknown                                     │
+  / (_    _)_/  │ Uptime    2d 20h 29m                                 │ │ Released  unknown                                     │
  / /  |  |      │ Shell     bash                                       │ │ Support   supported until 2027-05-19 (289 days)       │
  \ \__/  |      │ Packages  2809 (rpm)                                 │ │                                                       │
   \(_____/      └──────────────────────────────────────────────────────┘ └───────────────────────────────────────────────────────┘
-                ┌─ PROCESSOR ──────────────────────────────────────────┐ ┌─ MACHINE ─────────────────────────────────────────────┐
-                │ Model      13th Gen Intel(R) Core(TM) i7-1360P (16)  │ │ Model     ASUSTeK COMPUTER INC. Zenbook Flip UP340... │
-                │ Vendor     Intel                                     │ │ Board     ASUSTeK COMPUTER INC. UP3404VA              │
-                │ Micro-arch Raptor Lake, launched 2023, Intel 7       │ │ Firmware  UP3404VA.301 (2023-05-11)                   │
-                │ Signature  family 6, model 186, stepping 2, ucode... │ │                                                       │
-                │ Topology   12 cores / 16 threads                     │ │                                                       │
-                │ Clock      0.4 GHz now, 5.0 GHz max                  │ │                                                       │
-                │ Cache      48K L1d, 32K L1i, 1280K L2, 18432K L3     │ │                                                       │
-                │ Features   AVX2, AES-NI, SHA-NI, VT-x                │ │                                                       │
-                └──────────────────────────────────────────────────────┘ └───────────────────────────────────────────────────────┘
+                ┌─ PROCESSOR ────────────────────────────────────────────────────────────────────────────────────────────────────┐
+                │   _       _       _   Model      13th Gen Intel(R) Core(TM) i7-1360P (16)                                      │
+                │  (_)_ __ | |_ ___| |  Vendor     Intel                                                                         │
+                │  | | '_ \| __/ _ \ |  Generation 13th Gen Core, released 2022                                                  │
+                │  | | | | | ||  __/ |  Currency   3 generations behind Core Ultra Series 2 (2024)                               │
+                │  |_|_| |_|\__\___|_|  Micro-arch Raptor Lake, launched 2023, Intel 7                                           │
+                │                       Signature  family 6, model 186, stepping 2, ucode 0x6134                                 │
+                │                       Topology   12 cores / 16 threads                                                         │
+                │                       Clock      0.8 GHz now, 5.0 GHz max                                                      │
+                │                       Cache      48K L1d, 32K L1i, 1280K L2, 18432K L3                                         │
+                │                       Features   AVX2, AES-NI, SHA-NI, VT-x                                                    │
+                └────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
                 ┌─ MEMORY ───────────────────────────────────────────────────────────────────────────────────────────────────────┐
-                │ RAM       6.6 GiB / 15.2 GiB                                                                                   │
+                │ RAM       6.4 GiB / 15.2 GiB                                                                                   │
                 │ Swap      0.4 GiB / 7.9 GiB                                                                                    │
                 │ Modules   needs root: run sudo distrofetch                                                                     │
+                └────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+                ┌─ MACHINE ──────────────────────────────────────────────────────────────────────────────────────────────────────┐
+                │ Model     ASUSTeK COMPUTER INC. Zenbook Flip UP3404VA_UP3404VA                                                 │
+                │ Board     ASUSTeK COMPUTER INC. UP3404VA                                                                       │
+                │ Firmware  UP3404VA.301 (2023-05-11)                                                                            │
                 └────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -59,9 +66,19 @@ or the freshly-installed box where you have not yet installed anything.
   `SUPPORT_END=` in `/etc/os-release` where the distro ships it — Fedora, RHEL, and the
   RHEL rebuilds do — and from a bundled table otherwise. An expired release is coloured
   red, one within 90 days amber.
-- **What your CPU actually is.** "13th Gen Intel Core i7-1360P" is a marketing string;
-  `family 6, model 186` is Raptor Lake, launched 2023 on Intel 7. The same silicon ships
-  under several names, so the lookup keys on the family/model pair.
+- **What your CPU actually is, and how old.** "13th Gen Intel Core i7-1360P" is a
+  marketing string; `family 6, model 186` is Raptor Lake, launched 2023 on Intel 7. The
+  same silicon ships under several names, so the lookup keys on the family/model pair.
+- **How far behind the current generation you are** — `13th Gen Core, released 2022` and
+  `3 generations behind Core Ultra Series 2 (2024)`, beside an Intel or AMD mark. The
+  generation being compared against is named rather than just counted, because the count
+  is only as current as the bundled table: naming the basis is what lets you notice the
+  table has gone stale. Xeon and EPYC parts are reported as not sitting on the consumer
+  ladder rather than being placed on one.
+
+  Intel's 13th and 14th Gen desktop parts are the same silicon and share a family/model
+  pair, so the brand string wins where it carries a generation marker — otherwise every
+  14th Gen chip would report as a generation older than it is.
 - **Real core counts.** Read from `/sys/devices/system/cpu/present` rather than by
   counting `/proc/cpuinfo` blocks, which lists only *online* CPUs — so on a laptop that
   parks cores, the naive count changes between runs. Offline cores are noted, not hidden.
@@ -106,9 +123,13 @@ distrofetch --logo=gentoo     # wear someone else's
 distrofetch --no-logo         # panels only
 ```
 
-Logos are strictly ASCII, at most 20 rows and 30 columns. That is not aesthetic
-conservatism: `${#}` counts bytes rather than characters outside a UTF-8 locale, and an
-ASCII logo is the only kind whose column width is the same everywhere.
+`--no-logo` also removes the Intel/AMD mark from the processor panel — it is the switch
+for all art, not just the distro column. That mark drops out on its own once the panel is
+too narrow to hold both it and the values, because a legible fact beats a legible logo.
+
+Logos are strictly ASCII, at most 20 rows and 30 columns (vendor marks: 10 and 24). That
+is not aesthetic conservatism: `${#}` counts bytes rather than characters outside a UTF-8
+locale, and an ASCII logo is the only kind whose column width is the same everywhere.
 
 ## Install
 
@@ -158,16 +179,25 @@ output:
 
 ```console
 $ distrofetch --no-art --no-color
-tesla@workstation
+tesla@fadis-zenbook14
 ────────────────────────────────
 OS:        Fedora Linux 44 (Workstation Edition)
 Kernel:    Linux 7.1.5-201.fc44.x86_64
 Arch:      x86_64
-Uptime:    2d 7h 15m
+Uptime:    2d 20h 29m
 Packages:  2809 (rpm)
 Shell:     bash
+Released:  unknown
+Support:   supported until 2027-05-19 (289 days)
 CPU:       13th Gen Intel(R) Core(TM) i7-1360P (16)
-Memory:    6.9 GiB / 15.2 GiB
+CPU gen:   13th Gen Core (2022), 3 behind Core Ultra Series 2
+Cores:     12 cores / 16 threads
+Clock:     3.5 GHz now, 5.0 GHz max
+Cache:     48K L1d, 32K L1i, 1280K L2, 18432K L3
+Memory:    6.5 GiB / 15.2 GiB
+Swap:      0.4 GiB / 7.9 GiB
+Machine:   ASUSTeK COMPUTER INC. Zenbook Flip UP3404VA_UP3404VA
+Firmware:  UP3404VA.301 (2023-05-11)
 ```
 
 Both the animation and color switch off automatically whenever stdout is not a terminal,
@@ -275,7 +305,10 @@ about itself — when a release shipped, when support ends, what a family/model 
 called.
 
 **The reference tables go stale.** `lib/data/*.tsv` each carry a `Data as of:` line and a
-refresh source. Neither is consulted where a live source exists: `SUPPORT_END=` beats the
+refresh source. `cpu-generations.tsv` defines "latest" by its own highest ordinal, so
+adding a generation is one line and every "N behind" recalculates — nothing hardcodes the
+newest generation, and the failure mode of forgetting is an under-report that the named
+comparison basis makes visible. Neither is consulted where a live source exists: `SUPPORT_END=` beats the
 release table, and `/proc/cpuinfo` beats everything for what the CPU is. A row that cannot
 be confirmed is omitted rather than guessed — a blank is a gap, a wrong end-of-support
 date is a lie someone acts on.
