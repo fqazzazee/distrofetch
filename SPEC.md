@@ -391,6 +391,12 @@ generation. The failure mode of forgetting is therefore an *under*-report, never
 over-report — and because the dashboard names the generation it compares against, a
 stale basis is visible in the output rather than silent.
 
+That table records **when it was last verified against the vendors' sites**, not when it
+was last edited. `scripts/refresh-cpu-generations.sh` performs the comparison and exits
+non-zero when the table is behind. It reports rather than rewrites: the ordinal is a
+position in a release sequence, which is a judgement no scrape can make. It is not run
+in CI, because CI must not depend on two vendors' marketing pages being reachable.
+
 Both carry a `Data as of:` line that gets bumped on every refresh. Neither is consulted
 where a live source exists: `SUPPORT_END=` beats the release table, and nothing beats
 `/proc/cpuinfo` for what the CPU actually is. A row that cannot be confirmed is omitted

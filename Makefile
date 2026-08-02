@@ -14,12 +14,12 @@ BINDIR := $(DESTDIR)$(PREFIX)/bin
 LIBDIR := $(DESTDIR)$(PREFIX)/lib/distrofetch
 
 SCRIPTS := bin/distrofetch lib/detect.sh lib/render.sh lib/dmi.sh lib/hwdata.sh lib/devices.sh \
-           tests/fixtures/make-sysfs-fixtures.sh
+           tests/fixtures/make-sysfs-fixtures.sh scripts/refresh-cpu-generations.sh
 LIBS := lib/detect.sh lib/render.sh lib/dmi.sh lib/hwdata.sh lib/devices.sh
 SHFMT_FLAGS := -i 2 -ci -bn
 
 .DEFAULT_GOAL := help
-.PHONY: help check-tools lint fmt fmt-check test smoke fixtures dist install uninstall clean version
+.PHONY: help check-tools lint fmt fmt-check test smoke check-data fixtures dist install uninstall clean version
 
 help: ## Show this help
 	@grep -hE '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | \
@@ -51,6 +51,9 @@ test: ## Run the bats suite
 smoke: ## Run the real entry point against this machine
 	bin/distrofetch --no-color
 	bin/distrofetch --no-art --no-color
+
+check-data: ## Check the CPU generation table against Intel's and AMD's sites (needs network)
+	bash scripts/refresh-cpu-generations.sh
 
 fixtures: ## Regenerate the SMBIOS and sysfs test fixtures
 	python3 tests/fixtures/make-dmi-fixtures.py

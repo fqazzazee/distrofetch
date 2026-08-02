@@ -24,9 +24,26 @@
 # and do not sit on this ladder. A part whose microarchitecture has no generation maps
 # to `-` in cpu-arch.tsv and the dashboard says so.
 #
-# Data as of: 2026-08-02. Confirm against Intel ARK and AMD's product pages before
-# adding a row; an unconfirmed generation left out only under-reports, one added wrongly
-# tells everyone they are further behind than they are.
+# Verified against vendor sites: 2026-08-02
+#
+# That line means someone ran scripts/refresh-cpu-generations.sh and compared this table
+# against ark.intel.com and amd.com on that date. It is not the date the file was last
+# edited — an earlier version of this header recorded that instead, which made the table
+# look current when nothing had ever been checked against a source.
+#
+# Sources, and what each is good for:
+#
+#   Intel  ark.intel.com lists every processor family it knows, and each family's series
+#          page carries per-SKU launch quarters. The earliest quarter in a series is when
+#          the generation arrived.
+#   AMD    amd.com/en/products/processors/desktops/ryzen.html links products by series,
+#          so the highest /ryzen/NNNN-series/ path is the newest desktop family. The
+#          specification browser is a JS application with no documented data endpoint,
+#          so per-SKU dates come from individual product pages.
+#
+# An unconfirmed generation left out only under-reports; one added wrongly tells everyone
+# they are further behind than they are. Leave it out until the vendor's own site says
+# otherwise.
 
 Intel	1	1st Gen Core	2010
 Intel	2	2nd Gen Core	2011
@@ -44,6 +61,7 @@ Intel	13	13th Gen Core	2022
 Intel	14	14th Gen Core	2023
 Intel	15	Core Ultra Series 1	2023
 Intel	16	Core Ultra Series 2	2024
+Intel	17	Core Ultra Series 3	2026
 
 AMD	1	Ryzen 1000 (Zen)	2017
 AMD	2	Ryzen 2000 (Zen+)	2018

@@ -78,8 +78,8 @@ firmware; no panel border out of column at any terminal width.
       absent strings — but has never seen a real firmware table, because the tables are
       mode 0400 and the developer machine cannot be tested without root
 - [ ] Fedora and Arch release dates in the distribution table; they show `unknown` today
-- [ ] Confirm `cpu-generations.tsv` has the newest generation before each release; a
-      missing row silently under-reports every "N generations behind"
+- [x] `make check-data` compares the generation table against Intel's and AMD's sites
+- [ ] Do the same for `distro-releases.tsv` against endoflife.date
 - [ ] A `Data as of:` staleness warning when the tables are more than a year old
 - [ ] Decide whether `dmidecode` should be preferred when present *and* root
 - [ ] Verify the Thunderbolt panel against a machine with a device actually plugged in;

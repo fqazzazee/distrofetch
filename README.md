@@ -450,8 +450,20 @@ Detection is split from rendering so probes can be tested without a terminal.
 about itself — when a release shipped, when support ends, what a family/model pair is
 called.
 
-**The reference tables go stale.** `lib/data/*.tsv` each carry a `Data as of:` line and a
-refresh source. `cpu-generations.tsv` defines "latest" by its own highest ordinal, so
+**The reference tables go stale.** `lib/data/*.tsv` each carry a refresh source, and
+`cpu-generations.tsv` carries a `Verified against vendor sites:` date — the day someone
+last compared it to Intel's and AMD's own pages, not the day the file was last edited.
+
+```bash
+make check-data     # compare the CPU generation table against ark.intel.com and amd.com
+```
+
+That script **reports; it does not rewrite**. Mapping a marketing name to a position in
+the release sequence is a judgement — Intel restarted its numbering at "Core Ultra
+Series 1" after 14th Gen, and AMD skips desktop series numbers — so it automates the
+mechanical part, which is noticing a generation the table has never heard of. It is not
+run in CI: a red build caused by a vendor's marketing page being down teaches people to
+ignore red builds. `cpu-generations.tsv` defines "latest" by its own highest ordinal, so
 adding a generation is one line and every "N behind" recalculates — nothing hardcodes the
 newest generation, and the failure mode of forgetting is an under-report that the named
 comparison basis makes visible. Neither is consulted where a live source exists: `SUPPORT_END=` beats the
