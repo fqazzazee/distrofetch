@@ -62,6 +62,9 @@ firmware; no panel border out of column at any terminal width.
 - [x] CPU generation, its launch year, and distance from the newest known generation
 - [x] Intel and AMD vendor marks in the processor panel, dropping out when narrow
 - [x] Graphics, network, USB, and Thunderbolt panels, from sysfs only
+- [x] Storage panel with NVMe PCIe generation and width, negotiated against maximum
+- [x] Wi-Fi generation and ethernet rated speed from device names
+- [x] Clear screen and fit the dashboard to the terminal by dropping detail
 - [x] Synthetic sysfs fixtures covering switchable graphics, a down link, an unbound
       driver, a USB4 bus, and an unauthorised Thunderbolt device
 - [x] Column-alignment tests across seven terminal widths
@@ -78,6 +81,10 @@ firmware; no panel border out of column at any terminal width.
       the attached-device path has only ever run against fixtures
 - [ ] Verify graphics against a discrete GPU and against switchable graphics; the
       developer machine has integrated only and every CI runner is headless
+- [ ] Verify the Wi-Fi generation path against a discrete card (AX210, BE200); the
+      developer machine is CNVi, which is the case that deliberately reports nothing
+- [ ] Decide whether to add an image or HTML output target, which is the only way to
+      get real type-size control for a screenshot
 
 ---
 

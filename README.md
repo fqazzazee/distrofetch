@@ -10,9 +10,12 @@ lineage, memory modules, and firmware, beside your distro's logo in ASCII.
 
 Prints a dashboard of what a Linux machine actually is — the distribution and how long it
 is supported for, the processor down to its microarchitecture and generation, the memory
-modules with their speeds and manufacturers, the graphics and network adapters, the USB
-and Thunderbolt controllers with their link rates, and the board and its firmware —
-beside an ASCII logo of the running distro.
+modules with their speeds and manufacturers, the disks with their PCIe links, the
+graphics and network adapters, the USB and Thunderbolt controllers with their link
+rates, and the board and its firmware — beside an ASCII logo of the running distro.
+
+It clears the screen and sizes itself to the terminal, so what you get is one
+screenshot rather than something you have to scroll.
 
 It reads `/etc/os-release`, `/proc`, `/sys`, and your package manager's database. No
 network calls, no writes, and no root.
@@ -26,7 +29,7 @@ distrofetch 0.1.0                                                               
       /   __)\  │ OS        Fedora Linux 44 (Workstation Edition)      │ │ ID        fedora                                      │
       |  /  \ \ │ Kernel    Linux 7.1.5-201.fc44.x86_64                │ │ Version   44                                          │
    ___|  |__/ / │ Arch      x86_64                                     │ │ Codename  none                                        │
-  / (_    _)_/  │ Uptime    2d 20h 53m                                 │ │ Released  unknown                                     │
+  / (_    _)_/  │ Uptime    2d 21h 47m                                 │ │ Released  unknown                                     │
  / /  |  |      │ Shell     bash                                       │ │ Support   supported until 2027-05-19 (289 days)       │
  \ \__/  |      │ Packages  2809 (rpm)                                 │ │                                                       │
   \(_____/      └──────────────────────────────────────────────────────┘ └───────────────────────────────────────────────────────┘
@@ -38,20 +41,23 @@ distrofetch 0.1.0                                                               
                 │  |_|_| |_|\__\___|_|  Micro-arch Raptor Lake, launched 2023, Intel 7                                           │
                 │                       Signature  family 6, model 186, stepping 2, ucode 0x6134                                 │
                 │                       Topology   12 cores / 16 threads                                                         │
-                │                       Clock      0.9 GHz now, 5.0 GHz max                                                      │
+                │                       Clock      0.5 GHz now, 5.0 GHz max                                                      │
                 │                       Cache      48K L1d, 32K L1i, 1280K L2, 18432K L3                                         │
                 │                       Features   AVX2, AES-NI, SHA-NI, VT-x                                                    │
                 └────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
                 ┌─ MEMORY ───────────────────────────────────────────────────────────────────────────────────────────────────────┐
-                │ RAM       6.3 GiB / 15.2 GiB                                                                                   │
+                │ RAM       5.8 GiB / 15.2 GiB                                                                                   │
                 │ Swap      0.4 GiB / 7.9 GiB                                                                                    │
                 │ Modules   needs root: run sudo distrofetch                                                                     │
+                └────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+                ┌─ STORAGE ──────────────────────────────────────────────────────────────────────────────────────────────────────┐
+                │ nvme0n1   1.0 TB NVMe WD PC SN560 SDDPNQE-1T00-1102 - PCIe 4.0 x4                                              │
                 └────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
                 ┌─ GRAPHICS ─────────────────────────────────────────────────────────────────────────────────────────────────────┐
                 │ GPU       Intel Raptor Lake-P [Iris Xe Graphics] (i915)                                                        │
                 └────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
                 ┌─ NETWORK ──────────────────────────────────────────────────────────────────────────────────────────────────────┐
-                │ wlo1      Intel Raptor Lake PCH CNVi WiFi (iwlwifi) - up, Wi-Fi                                                │
+                │ wlo1      Intel Raptor Lake PCH CNVi WiFi (iwlwifi) - CNVi, generation set by the RF module not the PCI ID, up │
                 └────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
                 ┌─ PERIPHERALS ──────────────────────────────────────────────────────────────────────────────────────────────────┐
                 │ USB         fastest 20 Gbps; root ports are per controller, not sockets                                        │
@@ -101,6 +107,17 @@ or the freshly-installed box where you have not yet installed anything.
   parks cores, the naive count changes between runs. Offline cores are noted, not hidden.
 - **Your memory modules**: size, type, form factor, rated *and* configured speed, and
   manufacturer. The gap between rated and configured is how you notice XMP is off.
+- **What your NVMe drive is actually running at.** `PCIe 4.0 x4` — and when it has
+  negotiated below what it and the slot can do, `PCIe 3.0 x2 (max 4.0 x4)`. A Gen4 drive
+  in a Gen3 slot runs at half throughput and nothing else on the system tells you.
+- **Which Wi-Fi generation your card is** — `Wi-Fi 6E`, `Wi-Fi 7` — read from the device
+  name, because neither sysfs nor an unprivileged `ethtool` will say. For Intel CNVi
+  parts it reports that the generation *cannot* be known from the PCI ID rather than
+  guessing: CNVi puts the wireless MAC in the chipset and the radio in a separate
+  module, so two machines with the same ID can differ.
+- **Rated versus negotiated ethernet speed**, where the device name states a rating. The
+  gap between them is a bad cable or a switch port stuck at 100 Mbps, and neither number
+  identifies that alone.
 - **Which graphics adapter is actually driving the panel.** A laptop with switchable
   graphics has two, and they are reported separately — the integrated one as `GPU`, the
   discrete one as `3D`, which is how the PCI class distinguishes them.
@@ -155,6 +172,27 @@ distros.
 unprivileged; `sudo distrofetch` just fills in that one panel. The module *serial number*
 is never read at all — it is a durable hardware identifier, and this output exists to be
 screenshotted.
+
+## It fits on one screen
+
+The dashboard clears the screen and measures the terminal, then drops detail until it
+fits the height — first the rows that restate something (signature, cache, board), then
+the per-device breakdowns, then it pairs panels two across, and last it drops the logo.
+Panels with nothing to report disappear rather than spending three lines to say so.
+
+The order is strictly decreasing in information, so what you get is always the most
+complete layout that fits. Give it a taller or wider window and it fills it.
+
+```bash
+distrofetch --no-clear    # draw in place, leaving scrollback alone
+```
+
+Below roughly 26 lines it will overflow rather than hide what the machine is. And it
+will not change font size to fit: terminals have no portable way to do that. `DECDWL`
+and `DECDHL` exist in the VT100 repertoire, but kitty, alacritty, and most modern
+emulators ignore them, and where they work they halve the columns on that line and break
+every alignment guarantee in the layout. Hierarchy here comes from the palette and from
+what gets dropped.
 
 ## Logos
 
@@ -228,7 +266,7 @@ tesla@fadis-zenbook14
 OS:        Fedora Linux 44 (Workstation Edition)
 Kernel:    Linux 7.1.5-201.fc44.x86_64
 Arch:      x86_64
-Uptime:    2d 20h 53m
+Uptime:    2d 21h 47m
 Packages:  2809 (rpm)
 Shell:     bash
 Released:  unknown
@@ -236,10 +274,11 @@ Support:   supported until 2027-05-19 (289 days)
 CPU:       13th Gen Intel(R) Core(TM) i7-1360P (16)
 CPU gen:   13th Gen Core (2022), 3 behind Core Ultra Series 2
 Cores:     12 cores / 16 threads
-Clock:     0.8 GHz now, 5.0 GHz max
+Clock:     1.2 GHz now, 5.0 GHz max
 Cache:     48K L1d, 32K L1i, 1280K L2, 18432K L3
-Memory:    6.3 GiB / 15.2 GiB
+Memory:    5.8 GiB / 15.2 GiB
 Swap:      0.4 GiB / 7.9 GiB
+Disks:     nvme0n1 1.0 TB NVMe WD PC SN560 SDDPNQE-1T00-1102 PCIe 4.0 x4
 GPU:       Intel Raptor Lake-P [Iris Xe Graphics] (i915)
 Network:   wlo1 Intel Raptor Lake PCH CNVi WiFi up
 USB:       usb1 USB 2.0 480 Mbps 1 root ports; usb2 USB 3.2 Gen 2x2 20 Gbps 3 root ports; usb3 USB 2.0 480 Mbps 12 root ports; usb4 USB 3.2 Gen 2 10 Gbps 4 root ports

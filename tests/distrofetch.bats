@@ -51,7 +51,7 @@ require_utf8() {
 }
 
 @test "--duration 0 is accepted and prints the report" {
-  COLUMNS=120 run "$DF" --duration 0 --no-color
+  COLUMNS=120 LINES=60 run "$DF" --duration 0 --no-color
   [ "$status" -eq 0 ]
   [[ "$output" == *"SYSTEM"* ]]
 }
@@ -71,7 +71,7 @@ require_utf8() {
 }
 
 @test "the dashboard runs clean and labels every field" {
-  COLUMNS=120 run "$DF" --no-color
+  COLUMNS=120 LINES=60 run "$DF" --no-color --no-clear
   [ "$status" -eq 0 ]
   for label in OS Kernel Arch Uptime Packages Shell Model Vendor Topology \
     Cache Features RAM Swap Board Firmware Support; do
@@ -137,7 +137,7 @@ require_utf8() {
 # --- dashboard layout -----------------------------------------------------
 
 @test "the default output is the dashboard: panels, a logo, and every section" {
-  COLUMNS=120 run "$DF" --no-color
+  COLUMNS=120 LINES=60 run "$DF" --no-color
   [ "$status" -eq 0 ]
   [[ "$output" == *"┌"* ]]
   [[ "$output" == *"└"* ]]
@@ -147,7 +147,7 @@ require_utf8() {
 }
 
 @test "--no-logo keeps the panels and drops the art" {
-  COLUMNS=120 run "$DF" --no-color --no-logo
+  COLUMNS=120 LINES=60 run "$DF" --no-color --no-logo
   [ "$status" -eq 0 ]
   [[ "$output" == *"┌"* ]]
   [[ "$output" == *"PROCESSOR"* ]]
@@ -173,14 +173,14 @@ require_utf8() {
 # Below the fallback threshold the panels cannot hold their own content, and wrapping
 # every line is worse than not drawing them.
 @test "a terminal too narrow for panels falls back to the plain list" {
-  COLUMNS=40 run "$DF" --no-color
+  COLUMNS=40 LINES=60 run "$DF" --no-color
   [ "$status" -eq 0 ]
   [[ "$output" != *"┌"* ]]
   [[ "$output" == *"OS:"* ]]
 }
 
 @test "a wide terminal lays the panels out in two columns" {
-  COLUMNS=160 run "$DF" --no-color
+  COLUMNS=160 LINES=60 run "$DF" --no-color
   [ "$status" -eq 0 ]
   # SYSTEM and DISTRIBUTION share a line only in the two-column layout.
   [[ "$output" == *"SYSTEM"*"DISTRIBUTION"* ]]
@@ -192,7 +192,7 @@ require_utf8() {
 }
 
 @test "a narrow-but-not-tiny terminal stacks the panels in one column" {
-  COLUMNS=70 run "$DF" --no-color
+  COLUMNS=70 LINES=60 run "$DF" --no-color
   [ "$status" -eq 0 ]
   [[ "$output" == *"┌"* ]]
   local paired=0 line
@@ -209,7 +209,7 @@ require_utf8() {
   require_utf8
   local width edge first line plain
   for width in 60 70 80 100 120 140 200; do
-    COLUMNS=$width run "$DF" --no-color
+    COLUMNS=$width LINES=60 run "$DF" --no-color --no-clear
     [ "$status" -eq 0 ]
     first=""
     for line in "${lines[@]}"; do
@@ -230,7 +230,7 @@ require_utf8() {
   require_utf8
   local width line
   for width in 60 80 100 140; do
-    COLUMNS=$width run "$DF" --no-color
+    COLUMNS=$width LINES=60 run "$DF" --no-color --no-clear
     [ "$status" -eq 0 ]
     for line in "${lines[@]}"; do
       [ "${#line}" -le "$width" ]
@@ -256,14 +256,14 @@ require_utf8() {
 }
 
 @test "--logo selects a specific logo regardless of the running distro" {
-  COLUMNS=120 run "$DF" --no-color --logo=arch
+  COLUMNS=120 LINES=60 run "$DF" --no-color --logo=arch
   [ "$status" -eq 0 ]
   # The arch logo's last row is unmistakable.
   [[ "$output" == *"/_-''"* ]]
 }
 
 @test "--logo accepts a space-separated value" {
-  COLUMNS=120 run "$DF" --no-color --logo tux
+  COLUMNS=120 LINES=60 run "$DF" --no-color --logo tux
   [ "$status" -eq 0 ]
   [[ "$output" == *"|o_o |"* ]]
 }
@@ -306,14 +306,14 @@ require_utf8() {
 # --- processor panel -------------------------------------------------------
 
 @test "the processor panel reports a generation and how current it is" {
-  COLUMNS=140 run "$DF" --no-color
+  COLUMNS=140 LINES=60 run "$DF" --no-color
   [ "$status" -eq 0 ]
   [[ "$output" == *"Generation"* ]]
   [[ "$output" == *"Currency"* ]]
 }
 
 @test "the vendor logo appears in the processor panel on a wide terminal" {
-  COLUMNS=140 run "$DF" --no-color
+  COLUMNS=140 LINES=60 run "$DF" --no-color
   [ "$status" -eq 0 ]
   # One of the three bundled marks has to be there.
   [[ "$output" == *"|_|_| |_|"* || "$output" == *"/_/ \\_\\_|"* || "$output" == *"|CPU|"* ]]
@@ -322,7 +322,7 @@ require_utf8() {
 # The logo costs 22 columns inside the panel. Below the threshold every value clips to
 # make room for it, and a legible fact beats a legible logo.
 @test "the vendor logo drops out before the values start clipping" {
-  COLUMNS=64 run "$DF" --no-color
+  COLUMNS=64 LINES=60 run "$DF" --no-color
   [ "$status" -eq 0 ]
   [[ "$output" == *"PROCESSOR"* ]]
   [[ "$output" != *"|CPU|"* ]]
@@ -332,7 +332,7 @@ require_utf8() {
 }
 
 @test "--no-logo removes the vendor logo as well as the distro one" {
-  COLUMNS=140 run "$DF" --no-color --no-logo
+  COLUMNS=140 LINES=60 run "$DF" --no-color --no-logo
   [ "$status" -eq 0 ]
   [[ "$output" == *"PROCESSOR"* ]]
   [[ "$output" != *"|_|_| |_|"* ]]
@@ -365,12 +365,12 @@ require_utf8() {
 
 fixture_env() {
   local r="$BATS_TEST_DIRNAME/fixtures/sysfs"
-  printf 'DF_SYS_PCI=%s/pci DF_SYS_NET=%s/net DF_SYS_USB=%s/usb DF_SYS_TBT=%s/thunderbolt' \
-    "$r" "$r" "$r" "$r"
+  printf 'DF_SYS_PCI=%s/pci DF_SYS_NET=%s/net DF_SYS_USB=%s/usb DF_SYS_TBT=%s/thunderbolt DF_SYS_BLOCK=%s/block' \
+    "$r" "$r" "$r" "$r" "$r"
 }
 
 @test "the dashboard shows every device panel" {
-  COLUMNS=140 run "$DF" --no-color
+  COLUMNS=140 LINES=60 run "$DF" --no-color
   [ "$status" -eq 0 ]
   for section in GRAPHICS NETWORK PERIPHERALS; do
     [[ "$output" == *"$section"* ]]
@@ -378,7 +378,7 @@ fixture_env() {
 }
 
 @test "switchable graphics show both adapters, labelled" {
-  COLUMNS=140 run env $(fixture_env) "$DF" --no-color
+  COLUMNS=140 LINES=80 run env $(fixture_env) "$DF" --no-color
   [ "$status" -eq 0 ]
   [[ "$output" == *"GPU"* ]]
   [[ "$output" == *"3D"* ]]
@@ -386,7 +386,7 @@ fixture_env() {
 }
 
 @test "physical interfaces are shown and virtual ones are not" {
-  COLUMNS=140 run env $(fixture_env) "$DF" --no-color
+  COLUMNS=140 LINES=80 run env $(fixture_env) "$DF" --no-color
   [ "$status" -eq 0 ]
   [[ "$output" == *"eth0"* ]]
   [[ "$output" == *"wlan0"* ]]
@@ -395,7 +395,7 @@ fixture_env() {
 }
 
 @test "a down link is shown as down with no speed attached to it" {
-  COLUMNS=140 run env $(fixture_env) "$DF" --no-color
+  COLUMNS=140 LINES=80 run env $(fixture_env) "$DF" --no-color
   [[ "$output" == *"eth1"* ]]
   [[ "$output" != *"-1 Mbps"* ]]
   [[ "$output" != *"-1 Gbps"* ]]
@@ -404,14 +404,14 @@ fixture_env() {
 # The output is designed to be screenshotted. A MAC address is a durable unique
 # identifier for the machine, so it must never reach the screen.
 @test "no MAC address reaches the dashboard" {
-  COLUMNS=140 run env $(fixture_env) "$DF" --no-color
+  COLUMNS=140 LINES=80 run env $(fixture_env) "$DF" --no-color
   [[ "$output" != *"de:ad:be:ef"* ]]
-  COLUMNS=140 run env $(fixture_env) "$DF" --no-art --no-color
+  COLUMNS=140 LINES=80 run env $(fixture_env) "$DF" --no-art --no-color
   [[ "$output" != *"de:ad:be:ef"* ]]
 }
 
 @test "USB buses are grouped by speed class with a fastest-bus summary" {
-  COLUMNS=140 run env $(fixture_env) "$DF" --no-color
+  COLUMNS=140 LINES=80 run env $(fixture_env) "$DF" --no-color
   [ "$status" -eq 0 ]
   [[ "$output" == *"USB 2.0 (480 Mbps): 2 controllers"* ]]
   [[ "$output" == *"USB4 (40 Gbps): 1 controller"* ]]
@@ -421,12 +421,12 @@ fixture_env() {
 # Root-hub port counts do not map to sockets on the chassis: one USB-C connector is
 # wired to a 2.0 root hub and a 3.x one at once. The output has to say so.
 @test "the USB panel says root ports are not sockets" {
-  COLUMNS=140 run env $(fixture_env) "$DF" --no-color
+  COLUMNS=140 LINES=80 run env $(fixture_env) "$DF" --no-color
   [[ "$output" == *"not sockets"* ]]
 }
 
 @test "Thunderbolt domains report generation and security policy" {
-  COLUMNS=140 run env $(fixture_env) "$DF" --no-color
+  COLUMNS=140 LINES=80 run env $(fixture_env) "$DF" --no-color
   [ "$status" -eq 0 ]
   [[ "$output" == *"Thunderbolt 4 / USB4 (40 Gbps)"* ]]
   [[ "$output" == *"Thunderbolt 3 (40 Gbps)"* ]]
@@ -435,7 +435,7 @@ fixture_env() {
 }
 
 @test "an attached Thunderbolt device is listed with its authorisation state" {
-  COLUMNS=140 run env $(fixture_env) "$DF" --no-color
+  COLUMNS=140 LINES=80 run env $(fixture_env) "$DF" --no-color
   [[ "$output" == *"CalDigit TS4"* ]]
   [[ "$output" == *"not authorised"* ]]
 }
@@ -443,7 +443,7 @@ fixture_env() {
 @test "a machine with none of this hardware says so rather than failing" {
   local empty="$BATS_TEST_TMPDIR/none"
   mkdir -p "$empty"
-  COLUMNS=140 DF_SYS_PCI="$empty" DF_SYS_NET="$empty" DF_SYS_USB="$empty" \
+  COLUMNS=140 LINES=60 DF_SYS_PCI="$empty" DF_SYS_NET="$empty" DF_SYS_USB="$empty" \
     DF_SYS_TBT="$empty" run "$DF" --no-color
   [ "$status" -eq 0 ]
   [[ "$output" == *"none present"* ]]
@@ -463,10 +463,145 @@ fixture_env() {
   [ "$gpu_lines" -eq 1 ]
 }
 
+# --- storage ---------------------------------------------------------------
+
+@test "the storage panel lists disks with capacity, kind, and PCIe link" {
+  COLUMNS=140 LINES=80 run env $(fixture_env) "$DF" --no-color --no-clear
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"STORAGE"* ]]
+  [[ "$output" == *"nvme0n1"* ]]
+  [[ "$output" == *"1.0 TB"* ]]
+  [[ "$output" == *"NVMe"* ]]
+  [[ "$output" == *"PCIe 4.0 x4"* ]]
+}
+
+@test "a drive negotiated below its maximum shows both figures" {
+  COLUMNS=140 LINES=80 run env $(fixture_env) "$DF" --no-color --no-clear
+  [[ "$output" == *"PCIe 3.0 x2 (max 4.0 x4)"* ]]
+}
+
+@test "spinning disks and SSDs are distinguished" {
+  COLUMNS=140 LINES=80 run env $(fixture_env) "$DF" --no-color --no-clear
+  [[ "$output" == *"HDD"* ]]
+  [[ "$output" == *"SSD"* ]]
+}
+
+@test "no disk serial reaches the output" {
+  COLUMNS=140 LINES=80 run env $(fixture_env) "$DF" --no-color --no-clear
+  [[ "$output" != *SERIAL-DO-NOT-PRINT* ]]
+  run env $(fixture_env) "$DF" --no-art --no-color
+  [[ "$output" != *SERIAL-DO-NOT-PRINT* ]]
+}
+
+@test "the plain report carries the disks on one line" {
+  run env $(fixture_env) "$DF" --no-art --no-color
+  [[ "$output" == *"Disks:"* ]]
+}
+
+# --- wireless and wired detail ---------------------------------------------
+
+@test "a Wi-Fi generation is shown when the device name carries one" {
+  COLUMNS=140 LINES=80 run env $(fixture_env) "$DF" --no-color --no-clear
+  [ "$status" -eq 0 ]
+  # The fixture's wlan0 is 8086:51f1, whose pci.ids name says CNVi and no generation.
+  [[ "$output" == *"wlan0"* ]]
+}
+
+@test "an ethernet link shows its negotiated speed" {
+  COLUMNS=140 LINES=80 run env $(fixture_env) "$DF" --no-color --no-clear
+  [[ "$output" == *"1 Gbps"* ]]
+}
+
+# --- fitting the terminal --------------------------------------------------
+#
+# The point of the density system: the dashboard is meant to be one screenshot, so it
+# gives up detail rather than scrolling.
+
+@test "the dashboard fits the terminal height at a range of sizes" {
+  local h n
+  for h in 60 45 36 30; do
+    COLUMNS=150 LINES=$h run "$DF" --no-color --no-clear
+    [ "$status" -eq 0 ]
+    n="${#lines[@]}"
+    [ "$n" -le $((h - 1)) ]
+  done
+}
+
+@test "a tall terminal keeps the detail a short one drops" {
+  COLUMNS=150 LINES=60 run "$DF" --no-color --no-clear
+  local tall="${#lines[@]}"
+  [[ "$output" == *"Signature"* ]]
+  [[ "$output" == *"Cache"* ]]
+
+  COLUMNS=150 LINES=30 run "$DF" --no-color --no-clear
+  [ "${#lines[@]}" -lt "$tall" ]
+  [[ "$output" != *"Signature"* ]]
+  # The facts that identify the machine survive every density.
+  [[ "$output" == *"OS"* ]]
+  [[ "$output" == *"Model"* ]]
+  [[ "$output" == *"STORAGE"* ]]
+}
+
+# Panels whose one row says "none present" cost three lines to say nothing. At the
+# tightest density they are dropped instead.
+@test "panels with nothing to report are dropped when space is short" {
+  local empty="$BATS_TEST_TMPDIR/none"
+  mkdir -p "$empty"
+  COLUMNS=150 LINES=18 DF_SYS_PCI="$empty" DF_SYS_NET="$empty" DF_SYS_USB="$empty" \
+    DF_SYS_TBT="$empty" DF_SYS_BLOCK="$empty" run "$DF" --no-color --no-clear
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"none present"* ]]
+  [[ "$output" != *"no host controllers"* ]]
+}
+
+# The dense layout pairs panels two across, and dropping an empty one shifts every
+# later panel to the other column. A panel built at full width in a half-width slot
+# overruns the frame, so alignment has to hold there too.
+@test "every panel line ends at the same column in the dense layout" {
+  require_utf8
+  local edge first line plain h
+  for h in 30 26; do
+    COLUMNS=150 LINES=$h run "$DF" --no-color --no-clear
+    [ "$status" -eq 0 ]
+    first=""
+    for line in "${lines[@]}"; do
+      plain="${line%"${line##*[![:space:]]}"}"
+      case "$plain" in
+        *│ | *┐ | *┘) ;;
+        *) continue ;;
+      esac
+      edge="${#plain}"
+      if [ -z "$first" ]; then first="$edge"; fi
+      [ "$edge" -eq "$first" ]
+    done
+    [ -n "$first" ]
+  done
+}
+
+@test "the screen is cleared only on a terminal" {
+  # bats captures through a pipe, so this is the non-TTY path.
+  COLUMNS=150 LINES=60 run "$DF" --no-color
+  [ "$status" -eq 0 ]
+  [[ "$output" != *$'\033[2J'* ]]
+}
+
+@test "--no-clear suppresses the clear and is accepted" {
+  COLUMNS=150 LINES=60 run "$DF" --no-color --no-clear
+  [ "$status" -eq 0 ]
+  [[ "$output" != *$'\033[2J'* ]]
+  [[ "$output" == *"SYSTEM"* ]]
+}
+
+@test "--help documents the clear and the fitting" {
+  run "$DF" --help
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"--no-clear"* ]]
+}
+
 # --- hardware and release facts -------------------------------------------
 
 @test "the dashboard reports a support status for this distro" {
-  COLUMNS=120 run "$DF" --no-color
+  COLUMNS=120 LINES=60 run "$DF" --no-color
   [ "$status" -eq 0 ]
   [[ "$output" == *"Support"* ]]
 }
@@ -474,14 +609,14 @@ fixture_env() {
 # Memory module detail is root-only. An unprivileged run must say why rather than
 # printing "unknown", which reads as a failed probe.
 @test "memory modules report their reason when the raw tables are unreadable" {
-  COLUMNS=120 DF_DMI_ENTRIES=/nonexistent run "$DF" --no-color
+  COLUMNS=120 LINES=60 DF_DMI_ENTRIES=/nonexistent run "$DF" --no-color
   [ "$status" -eq 0 ]
   [[ "$output" == *"no SMBIOS tables"* ]]
   [[ "$output" != *"Modules   unknown"* ]]
 }
 
 @test "memory modules are listed when the raw tables can be read" {
-  COLUMNS=140 DF_DMI_ENTRIES="$BATS_TEST_DIRNAME/fixtures/dmi-entries" \
+  COLUMNS=140 LINES=60 DF_DMI_ENTRIES="$BATS_TEST_DIRNAME/fixtures/dmi-entries" \
     run "$DF" --no-color
   [ "$status" -eq 0 ]
   [[ "$output" == *"DDR5"* ]]

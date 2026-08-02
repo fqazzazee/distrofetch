@@ -40,6 +40,8 @@ Current phase only. See `ROADMAP.md` for the phase and its exit condition.
 - [x] CPU generation, launch year, and distance from the newest known generation
 - [x] Intel/AMD vendor marks in the processor panel
 - [x] Graphics, network, USB, and Thunderbolt panels
+- [x] Storage panel with NVMe PCIe link detail
+- [x] Fit-to-terminal density system with screen clear
 - [x] Branch protection on `main` requiring all six checks
 
 ## Blocked

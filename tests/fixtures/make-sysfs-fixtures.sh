@@ -131,4 +131,47 @@ printf 'CalDigit\n' >"$tbt/0-1/vendor_name"
 printf 'TS4\n' >"$tbt/0-1/device_name"
 printf '0\n' >"$tbt/0-1/authorized"
 
+# --- block devices: NVMe with a PCIe link, SATA SSD, spinning disk ----------
+
+block="$root/block"
+mkdir -p "$block"
+
+mkdisk() {
+  local name="$1" sectors="$2" rot="$3" model="$4"
+  mkdir -p "$block/$name/queue" "$block/$name/device"
+  printf '%s\n' "$sectors" >"$block/$name/size"
+  printf '%s\n' "$rot" >"$block/$name/queue/rotational"
+  # sysfs pads the SCSI model field to a fixed width, and the parser has to trim it.
+  printf '%-40s\n' "$model" >"$block/$name/device/model"
+  # Never read, and present so a test can prove it stays unread.
+  printf 'SERIAL-DO-NOT-PRINT\n' >"$block/$name/device/serial"
+}
+
+# NVMe: the PCIe link lives two levels down, on the controller's own PCI function.
+mkdisk nvme0n1 2000409264 0 'WD PC SN560 SDDPNQE-1T00-1102'
+mkdir -p "$block/nvme0n1/device/device"
+printf '16.0 GT/s PCIe\n' >"$block/nvme0n1/device/device/current_link_speed"
+printf '16.0 GT/s PCIe\n' >"$block/nvme0n1/device/device/max_link_speed"
+printf '4\n' >"$block/nvme0n1/device/device/current_link_width"
+printf '4\n' >"$block/nvme0n1/device/device/max_link_width"
+
+# A Gen4 drive negotiated down to Gen3 x2 — the case worth surfacing, since nothing
+# else on the system says the drive is in the wrong slot.
+mkdisk nvme1n1 4000797360 0 'Samsung SSD 990 PRO 2TB'
+mkdir -p "$block/nvme1n1/device/device"
+printf '8.0 GT/s PCIe\n' >"$block/nvme1n1/device/device/current_link_speed"
+printf '16.0 GT/s PCIe\n' >"$block/nvme1n1/device/device/max_link_speed"
+printf '2\n' >"$block/nvme1n1/device/device/current_link_width"
+printf '4\n' >"$block/nvme1n1/device/device/max_link_width"
+
+mkdisk sda 500118192 0 'Samsung SSD 860 EVO 250GB'
+mkdisk sdb 7814037168 1 'ST4000DM004-2CV104'
+
+# None of these is a disk and all must be skipped.
+for junk in loop0 loop7 ram0 zram0 dm-0 sr0; do
+  mkdir -p "$block/$junk/queue"
+  printf '0\n' >"$block/$junk/size"
+  printf '0\n' >"$block/$junk/queue/rotational"
+done
+
 printf 'sysfs fixtures written to %s\n' "$root"
