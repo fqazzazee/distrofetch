@@ -21,7 +21,11 @@ jobs:
     name: shellcheck
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          # No job here pushes, so the checkout has no use for a token in
+          # .git/config where later steps — and anything they run — can read it.
+          persist-credentials: false
       # shellcheck ships preinstalled on the ubuntu-latest image.
       - run: make lint
 
@@ -29,8 +33,12 @@ jobs:
     name: shfmt
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-go@v6
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          # No job here pushes, so the checkout has no use for a token in
+          # .git/config where later steps — and anything they run — can read it.
+          persist-credentials: false
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version: '1.25'
       # Pinned: an unpinned shfmt turns a formatting release into a red build.
@@ -41,7 +49,11 @@ jobs:
     name: bats
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          # No job here pushes, so the checkout has no use for a token in
+          # .git/config where later steps — and anything they run — can read it.
+          persist-credentials: false
       - name: install bats
         run: sudo apt-get update && sudo apt-get install -y bats
       - run: make test

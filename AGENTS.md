@@ -100,6 +100,9 @@ the same make target you just ran.
 - `readlink -f` prints a path whose last component does not exist. Test `-L` before
   resolving a sysfs `driver` symlink, or an unbound device reports its driver as the
   literal string `driver`.
+- Workflow changes have to survive `zizmor` and `actionlint`; the Security workflow runs
+  both. Actions are pinned by commit hash — never a tag — and no job other than release
+  may hold `contents: write`.
 - Bundled tables in `lib/data/` are snapshots. A live source always wins; a miss prints
   `unknown`. Never fill a gap with arithmetic or a policy rule — a visible gap is a bug
   report, a confident wrong date is not.
