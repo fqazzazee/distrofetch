@@ -31,14 +31,17 @@ jobs:
             image: archlinux:latest
             bootstrap: pacman -Sy --noconfirm --needed git base-devel coreutils
             pkgmgr: pacman
+            logo: arch
           - name: debian
             image: debian:stable-slim
             bootstrap: apt-get update && apt-get install -y --no-install-recommends git ca-certificates make coreutils
             pkgmgr: dpkg
+            logo: debian
           - name: fedora
             image: fedora:latest
             bootstrap: dnf -y install git make coreutils
             pkgmgr: rpm
+            logo: fedora
     steps:
       - name: bootstrap
         run: ${{ matrix.bootstrap }}
@@ -53,38 +56,80 @@ jobs:
         run: |
           set -euo pipefail
           # Exercise the installed entry point from outside the source tree, so a
-          # broken lib/ path resolution fails here instead of on a user's machine.
+          # broken lib/, data/, or logos/ path resolution fails here instead of on a
+          # user's machine.
           cd /
           distrofetch --version
-          distrofetch --no-color | tee /tmp/report.txt
 
-          # Every field must be populated — "unknown" means a probe fell through.
-          for label in OS: Kernel: Arch: Uptime: Packages: Shell: CPU: Memory:; do
-            grep -q "$label" /tmp/report.txt || { echo "missing field: $label" >&2; exit 1; }
+          # --- the plain report: one fact per line, the parseable form -------------
+          distrofetch --no-art --no-color | tee /tmp/plain.txt
+
+          for label in OS: Kernel: Arch: Uptime: Packages: Shell: CPU: Cores: \
+            Clock: Cache: Memory: Swap: Machine: Firmware: Support:; do
+            grep -q "^$label" /tmp/plain.txt \
+              || { echo "missing field: $label" >&2; exit 1; }
           done
-          if grep -q 'unknown' /tmp/report.txt; then
-            echo "a probe returned unknown on ${{ matrix.name }}:" >&2
-            grep 'unknown' /tmp/report.txt >&2
-            exit 1
-          fi
+
+          # Only the probes must be populated. Released/Machine/Firmware legitimately
+          # come back unknown — a release the bundled table does not cover, and a
+          # container with no DMI — and asserting otherwise would force the table to
+          # be padded with guesses.
+          for label in OS: Kernel: Arch: Uptime: Packages: Shell: CPU: Cores: Memory:; do
+            if grep "^$label" /tmp/plain.txt | grep -q 'unknown'; then
+              echo "probe returned unknown on ${{ matrix.name }}:" >&2
+              grep "^$label" /tmp/plain.txt >&2
+              exit 1
+            fi
+          done
 
           # detect_packages must pick the right backend for this distro.
-          grep -q '(${{ matrix.pkgmgr }})' /tmp/report.txt \
+          grep -q '(${{ matrix.pkgmgr }})' /tmp/plain.txt \
             || { echo "expected ${{ matrix.pkgmgr }} package backend" >&2; exit 1; }
 
-          # --no-art is what anything parsing this output is told to use, so no part of
-          # the frame may survive it, and it must stay one line per field plus the
-          # two-line header. The default report is checked above; this checks the escape
-          # hatch still works on a distro where tput may not even be installed.
-          # grep -F, not a bracket expression: containers run in the C locale, where a
-          # bracket expression matches bytes, and the header rule U+2500 shares its
-          # first two bytes with the frame's U+2502. Fixed strings compare whole
-          # sequences and tell the two apart.
-          distrofetch --no-art --no-color > /tmp/plain.txt
-          if grep -qF -e '│' -e '┌' -e '┐' -e '└' -e '┘' -e '├' -e '┤' -e '█' /tmp/plain.txt; then
-            echo "--no-art emitted banner or frame characters:" >&2
+          # --no-art is what anything parsing this output is told to use, so no part
+          # of the dashboard may survive it. grep -F, not a bracket expression:
+          # containers run in the C locale, where a bracket expression matches bytes,
+          # and the header rule U+2500 shares its first two bytes with U+2502.
+          if grep -qF -e '│' -e '┌' -e '┐' -e '└' -e '┘' -e '├' -e '┤' /tmp/plain.txt; then
+            echo "--no-art emitted frame characters:" >&2
             cat /tmp/plain.txt >&2
             exit 1
           fi
-          lines=$(wc -l < /tmp/plain.txt)
-          [ "$lines" -eq 10 ] || { echo "expected 10 plain lines, got $lines" >&2; exit 1; }
+
+          # --- the dashboard ------------------------------------------------------
+          COLUMNS=140 distrofetch --no-color | tee /tmp/dash.txt
+          for section in SYSTEM DISTRIBUTION PROCESSOR MEMORY MACHINE; do
+            grep -q "$section" /tmp/dash.txt \
+              || { echo "missing panel: $section" >&2; exit 1; }
+          done
+
+          # The logo is picked from ID= in /etc/os-release. A wrong pick is silent
+          # otherwise: every distro would still render, just wearing the wrong face.
+          COLUMNS=140 distrofetch --no-color --logo=${{ matrix.logo }} > /tmp/forced.txt
+          diff <(sed 's/[0-9]//g' /tmp/dash.txt) <(sed 's/[0-9]//g' /tmp/forced.txt) \
+            > /dev/null \
+            || { echo "auto-selected logo is not ${{ matrix.logo }}" >&2; exit 1; }
+
+          # Every panel border must land in the same column or the grid shears.
+          #
+          # The box characters are translated to ASCII first, one sed expression per
+          # character. Measuring them directly does not work: containers run in the C
+          # locale, where awk's length() counts bytes, and a full-width panel row
+          # carries two three-byte borders where a paired row carries four. Those rows
+          # are the same width on screen and differ by four bytes, so a byte-wise
+          # check reports a shear that is not there.
+          COLUMNS=140 distrofetch --no-color \
+            | sed -e 's/│/|/g' -e 's/┌/+/g' -e 's/┐/+/g' -e 's/└/+/g' \
+                  -e 's/┘/+/g' -e 's/├/+/g' -e 's/┤/+/g' -e 's/─/-/g' \
+            | grep -F '|' \
+            | awk '{ if (n == 0) { n = length($0) }
+                     else if (length($0) != n) {
+                       print "ragged panel edge at line " NR ": " length($0) " vs " n
+                       exit 1 } }'
+
+          # --- memory modules -----------------------------------------------------
+          # Unprivileged runs must explain themselves rather than printing "unknown",
+          # which reads as a failed probe. Containers have no SMBIOS access at all.
+          grep -q -e 'needs root' -e 'no SMBIOS' -e 'no memory device' -e 'DIMM' \
+            /tmp/dash.txt \
+            || { echo "memory panel said nothing about modules" >&2; exit 1; }

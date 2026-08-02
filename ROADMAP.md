@@ -19,7 +19,7 @@ copy; `make dist` produces a verifiable tarball.
 - [x] Test runner wired up, suite passing locally
 - [x] `make install` and `make dist` produce real artifacts
 - [ ] Smoke test green on all three distros
-- [ ] Branch protection on `main` requiring the CI checks
+- [x] Branch protection on `main` requiring the CI checks
 
 ---
 
@@ -43,28 +43,46 @@ and the same holds by hand on a VM and a Raspberry Pi. CPU detection handles the
 
 ---
 
-## Phase 2 — The animation is worth watching
+## Phase 2 — The dashboard tells you something you did not know
 
-Phase 1 makes it correct. This makes it the reason someone installs it over `uname -a`.
+**Goal:** the output answers questions `uname -a` and `free -h` cannot — how long this
+release is supported, what this silicon actually is, what is in the memory slots.
 
-**Goal:** the rain reads as the film effect, not as random characters, and it costs
-nothing on a machine where it is unwanted.
+**Exit condition:** every panel populated on the three tested distros; module detail
+correct against real hardware under `sudo` on at least two machines with different
+firmware; no panel border out of column at any terminal width.
 
-**Exit condition:** glyphs fall in coherent columns with a bright leading character and a
-fading tail; the animation runs at a stable frame rate in a 200-column terminal without
-pegging a core; `--no-rain` and non-TTY output are provably escape-free.
+- [x] Five-panel dashboard with a responsive two- and one-column layout
+- [x] Per-distro ASCII logos with `ID_LIKE` fallback and a generic default
+- [x] Release date and end-of-support status, live `SUPPORT_END=` beating the table
+- [x] CPU microarchitecture, launch year, and process node from family/model
+- [x] Core counts from `/sys/devices/system/cpu/present`, with offline cores noted
+- [x] Cache, clock, and instruction-set extensions
+- [x] SMBIOS type-17 parser for module size, type, speed, and manufacturer
+- [x] Column-alignment tests across seven terminal widths
+- [ ] **Verify the SMBIOS parser against real hardware.** It passes against synthetic
+      fixtures covering both size units, the extended-size escape, empty slots, and
+      absent strings — but has never seen a real firmware table, because the tables are
+      mode 0400 and the developer machine cannot be tested without root
+- [ ] Fedora and Arch release dates in the distribution table; they show `unknown` today
+- [ ] A `Data as of:` staleness warning when the tables are more than a year old
+- [ ] Decide whether `dmidecode` should be preferred when present *and* root
 
-- [x] Column-based trails with a lit head and a decaying tail, replacing scattered glyphs
+---
+
+## Phase 2b — The animation, if anyone wants it
+
+Deprioritised: the maintainer's position is that the animation is not the point. The
+rain works and is tested; these are the open threads if it ever becomes interesting
+again.
+
+- [x] Column-based trails with a lit head and a decaying tail
 - [x] Degrade to ASCII when the locale cannot render half-width katakana
-- [x] Measure it: 2 seconds of rain costs ~0.24s CPU at 80 columns and ~0.73s at 200 —
-      roughly 12% and 36% of one core, measured with `times` under a pty
-- [x] Run on the alternate screen buffer so the animation does not destroy scrollback
-- [x] Wordmark banner and a frame around the report, `--no-art` to suppress
-- [x] Values resolve out of noise after the rain instead of appearing all at once
-- [ ] Frame budget instead of a fixed `sleep 0.045`, so wide terminals do not stutter
+- [x] Run on the alternate screen buffer so scrollback survives
+- [x] Measured: 2 seconds costs ~0.24s CPU at 80 columns, ~0.73s at 200
+- [ ] Frame budget instead of a fixed `sleep 0.045`
 - [ ] Handle `SIGWINCH` mid-animation
-- [ ] Font fallback: a UTF-8 locale does not prove the font has katakana. A terminal
-      without it shows tofu, and nothing here detects that
+- [ ] Font fallback: a UTF-8 locale does not prove the font has katakana
 
 ---
 
@@ -88,6 +106,9 @@ attached; install instructions verified by someone who is not me.
      out of here, never worked on in place. -->
 
 - arm64 smoke tests under QEMU — roughly 10x slower, so only once arm64 is claimed
+- More logos, contributed. The budget is the rule: ASCII, 20 rows, 30 columns
+- GPU detection, which is where fetch tools go to become unmaintainable — still a
+  non-goal, noted here because it is the most-requested thing this dashboard lacks
 - `--json` output, which would make it scriptable and is a different tool's job
 - Alpine and musl support, which means auditing every coreutils flag used
 - Theming beyond the matrix palette

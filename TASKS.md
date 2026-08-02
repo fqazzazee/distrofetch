@@ -2,27 +2,38 @@
 
 Current phase only. See `ROADMAP.md` for the phase and its exit condition.
 
-**Phase:** Phase 0 — Scaffolding
+**Phase:** Phase 2 — The dashboard tells you something you did not know
 
 ## Now
 
 <!-- One item. What is actually being worked on. -->
 
-- [ ] Push to GitHub and confirm the CI and smoke-distro workflows are green on the
-      first run
+- [ ] Verify the SMBIOS type-17 parser against real firmware: `sudo distrofetch` on at
+      least two machines with different vendors, and compare against `sudo dmidecode -t 17`
 
 ## Next
 
 <!-- Ready to start, ordered. If a task is not small enough to describe in a line, split
      it. -->
 
-- [ ] Turn on branch protection for `main`: require the shellcheck, shfmt, and bats
-      checks plus all three smoke jobs
+- [ ] Add Fedora and Arch release dates to `lib/data/distro-releases.tsv`; both report
+      `Released: unknown` today
+- [ ] Warn when a bundled table's `Data as of:` date is more than a year old
+- [ ] Decide whether `dmidecode` should be preferred when present *and* running as root
 - [ ] Enable private vulnerability reporting in repo settings — SECURITY.md links to it
 - [ ] Enable Discussions, or drop the link from `.github/ISSUE_TEMPLATE/config.yml`
-- [ ] Resolve the three open questions in SPEC.md, starting with the default rain
-      duration
-- [ ] Verify `make install PREFIX=~/.local` and run the installed copy from `/`
+- [ ] `gh repo edit --delete-branch-on-merge`; branches are being deleted by hand
+- [ ] Resolve the open questions in SPEC.md, starting with whether the CPU table should
+      grow a model-string layer
+
+## Done this phase
+
+- [x] Five-panel responsive dashboard, alignment-tested at seven widths
+- [x] Per-distro ASCII logos with `ID_LIKE` fallback
+- [x] Distribution release date and support status
+- [x] CPU microarchitecture, launch year, process node, cache, clock, features
+- [x] SMBIOS type-17 parser with synthetic fixtures
+- [x] Branch protection on `main` requiring all six checks
 
 ## Blocked
 

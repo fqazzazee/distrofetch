@@ -13,11 +13,12 @@ VERSION := $(shell sed -n 's/^DISTROFETCH_VERSION="\(.*\)"$$/\1/p' bin/distrofet
 BINDIR := $(DESTDIR)$(PREFIX)/bin
 LIBDIR := $(DESTDIR)$(PREFIX)/lib/distrofetch
 
-SCRIPTS := bin/distrofetch lib/detect.sh lib/render.sh scripts/banner.sh
+SCRIPTS := bin/distrofetch lib/detect.sh lib/render.sh lib/dmi.sh lib/hwdata.sh
+LIBS := lib/detect.sh lib/render.sh lib/dmi.sh lib/hwdata.sh
 SHFMT_FLAGS := -i 2 -ci -bn
 
 .DEFAULT_GOAL := help
-.PHONY: help check-tools lint fmt fmt-check test smoke dist install uninstall clean version
+.PHONY: help check-tools lint fmt fmt-check test smoke fixtures dist install uninstall clean version
 
 help: ## Show this help
 	@grep -hE '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | \
@@ -48,6 +49,10 @@ test: ## Run the bats suite
 
 smoke: ## Run the real entry point against this machine
 	bin/distrofetch --no-color
+	bin/distrofetch --no-art --no-color
+
+fixtures: ## Regenerate the SMBIOS test fixtures
+	python3 tests/fixtures/make-dmi-fixtures.py
 
 version: ## Print the version bin/distrofetch reports
 	@echo $(VERSION)
@@ -62,8 +67,9 @@ dist: ## Build dist/distrofetch-$(VERSION).tar.gz and its checksum
 
 install: ## Install to PREFIX (default /usr/local)
 	install -Dm755 bin/distrofetch $(BINDIR)/distrofetch
-	install -Dm644 lib/detect.sh $(LIBDIR)/detect.sh
-	install -Dm644 lib/render.sh $(LIBDIR)/render.sh
+	for f in $(LIBS); do install -Dm644 "$$f" "$(LIBDIR)/$$(basename $$f)"; done
+	for f in lib/data/*.tsv; do install -Dm644 "$$f" "$(LIBDIR)/data/$$(basename $$f)"; done
+	for f in lib/logos/*.txt; do install -Dm644 "$$f" "$(LIBDIR)/logos/$$(basename $$f)"; done
 
 uninstall: ## Remove an installed copy
 	rm -f $(BINDIR)/distrofetch
