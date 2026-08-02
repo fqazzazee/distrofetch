@@ -44,7 +44,7 @@ jobs:
         run: ${{ matrix.bootstrap }}
 
       # checkout needs git present, which is why bootstrap runs first.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: install
         run: make install PREFIX=/usr/local

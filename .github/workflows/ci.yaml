@@ -21,7 +21,7 @@ jobs:
     name: shellcheck
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       # shellcheck ships preinstalled on the ubuntu-latest image.
       - run: make lint
 
@@ -29,8 +29,8 @@ jobs:
     name: shfmt
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
         with:
           go-version: '1.25'
       # Pinned: an unpinned shfmt turns a formatting release into a red build.
@@ -41,7 +41,7 @@ jobs:
     name: bats
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: install bats
         run: sudo apt-get update && sudo apt-get install -y bats
       - run: make test
