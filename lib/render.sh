@@ -258,14 +258,33 @@ _df_clip() {
 # only tints the value; the layout never changes with it, so a coloured line and a
 # plain one still occupy the same columns.
 
-# _df_panel OUTVAR TITLE WIDTH KEYW ROW...
+# _df_panel OUTVAR TITLE WIDTH KEYW ARTVAR ROW...
+#
+# ARTVAR names an array of ASCII art lines to run down the left of the panel's interior,
+# or `-` for none. The art is measured with ${#} and so must be ASCII — see the header
+# of this file. Content is indented past it and the usable width shrinks to match, so a
+# panel with art and one without still close at the same column.
 _df_panel() {
   local -n _panel_out="$1"
-  local title="$2" width="$3" keyw="$4"
-  shift 4
+  local title="$2" width="$3" keyw="$4" art_name="$5"
+  shift 5
 
   local inner=$((width - 4))
   local row key value level plain pad rule title_rule tint
+  local -a art=()
+  local art_w=0 art_i=0 lead line
+
+  if [ "$art_name" != '-' ]; then
+    local -n _art_src="$art_name"
+    art=("${_art_src[@]}")
+    for line in "${art[@]}"; do
+      if [ "${#line}" -gt "$art_w" ]; then
+        art_w="${#line}"
+      fi
+    done
+    # Two spaces between art and content, so the gutter reads as deliberate.
+    [ "$art_w" -gt 0 ] && inner=$((inner - art_w - 2))
+  fi
 
   _panel_out=()
 
@@ -285,6 +304,17 @@ _df_panel() {
       *) tint="$DF_BRIGHT" ;;
     esac
 
+    # The art column, padded to its own width, or blank once the art runs out.
+    lead=""
+    if [ "$art_w" -gt 0 ]; then
+      line=""
+      if [ "$art_i" -lt "${#art[@]}" ]; then
+        line="${art[$art_i]}"
+      fi
+      printf -v lead '%s%-*s%s  ' "$DF_GREEN" "$art_w" "$line" "$DF_RESET"
+      art_i=$((art_i + 1))
+    fi
+
     if [ -z "$key" ]; then
       # A keyless row spans the full inner width — used for DIMM lines and notes.
       _df_clip "$value" "$inner"
@@ -292,7 +322,7 @@ _df_panel() {
       plain="$value"
       pad=$((inner - ${#plain}))
       [ "$pad" -lt 0 ] && pad=0
-      _panel_out+=("${DF_DIM}│${DF_RESET} ${tint}${value}${DF_RESET}$(printf '%*s' "$pad" '') ${DF_DIM}│${DF_RESET}")
+      _panel_out+=("${DF_DIM}│${DF_RESET} ${lead}${tint}${value}${DF_RESET}$(printf '%*s' "$pad" '') ${DF_DIM}│${DF_RESET}")
       continue
     fi
 
@@ -301,7 +331,16 @@ _df_panel() {
     printf -v plain '%-*s %s' "$keyw" "$key" "$value"
     pad=$((inner - ${#plain}))
     [ "$pad" -lt 0 ] && pad=0
-    _panel_out+=("${DF_DIM}│${DF_RESET} ${DF_GREEN}$(printf '%-*s' "$keyw" "$key")${DF_RESET} ${tint}${value}${DF_RESET}$(printf '%*s' "$pad" '') ${DF_DIM}│${DF_RESET}")
+    _panel_out+=("${DF_DIM}│${DF_RESET} ${lead}${DF_GREEN}$(printf '%-*s' "$keyw" "$key")${DF_RESET} ${tint}${value}${DF_RESET}$(printf '%*s' "$pad" '') ${DF_DIM}│${DF_RESET}")
+  done
+
+  # Art taller than the row list keeps going: the logo is not worth truncating, and a
+  # panel that swallows half its own artwork looks like a bug.
+  while [ "$art_i" -lt "${#art[@]}" ]; do
+    printf -v lead '%s%-*s%s  ' "$DF_GREEN" "$art_w" "${art[$art_i]}" "$DF_RESET"
+    _df_blank_line "$inner"
+    _panel_out+=("${DF_DIM}│${DF_RESET} ${lead}${_df_out} ${DF_DIM}│${DF_RESET}")
+    art_i=$((art_i + 1))
   done
 
   _df_repeat $((width - 2)) '─'
@@ -370,6 +409,23 @@ DF_D_VERSION=""
 DF_LOGO_LINES=()
 DF_LOGO_WIDTH=0
 
+DF_CPU_LOGO_LINES=()
+
+# The vendor logo for the processor panel. Same ASCII rule as the distro logos, and the
+# same switch: --no-logo turns off all art, not just the distro column.
+_df_load_cpu_logo() {
+  local name line
+  DF_CPU_LOGO_LINES=()
+  [ "$DF_LOGO" != none ] || return 0
+
+  name="$(hwdata_cpu_logo_name "$(detect_cpu_vendor)")"
+  [ -r "$DISTROFETCH_CPU_LOGOS/$name.txt" ] || return 0
+
+  while IFS= read -r line || [ -n "$line" ]; do
+    DF_CPU_LOGO_LINES+=("$line")
+  done <"$DISTROFETCH_CPU_LOGOS/$name.txt"
+}
+
 # Load the logo art. Logos are strictly ASCII so ${#} measures them correctly in any
 # locale — the same reason the frame's width is computed rather than measured.
 _df_load_logo() {
@@ -424,6 +480,7 @@ render_dashboard() {
   fi
 
   _df_load_logo
+  _df_load_cpu_logo
   logo_w="$DF_LOGO_WIDTH"
   # One space joins the logo column to the body, so the body gets everything else.
   # Reserving two here silently loses the rightmost column of every panel.
@@ -445,19 +502,20 @@ render_dashboard() {
     local half2=$((body_w - 1 - half))
     _df_build_system p_system "$half"
     _df_build_distro p_distro "$half2"
-    _df_build_cpu p_cpu "$half"
-    _df_build_machine p_machine "$half2"
-    # Memory takes the full width: a DIMM line carries locator, size, type, form
-    # factor, both speeds, and a part number, and it is the row people actually came
-    # for. Clipping it to half a screen defeats the panel.
+    # Three panels take the full width, each for its own reason: the processor panel
+    # carries a vendor logo in its gutter, a DIMM line carries locator, size, type,
+    # form factor, both speeds, and a part number, and the machine panel holds vendor
+    # strings long enough to clip at half width ("ASUSTeK COMPUTER INC. Zenbook Fl...").
+    _df_build_cpu p_cpu "$body_w"
     _df_build_memory p_mem "$body_w"
+    _df_build_machine p_machine "$body_w"
 
     _df_equalize p_system p_distro "$half" "$half2"
-    _df_equalize p_cpu p_machine "$half" "$half2"
 
     _df_logo_beside p_system p_distro "$logo_w" "$half" "$half2"
-    _df_indent_pair p_cpu p_machine "$logo_w" "$half" "$half2"
+    _df_indent_panel p_cpu "$logo_w"
     _df_indent_panel p_mem "$logo_w"
+    _df_indent_panel p_machine "$logo_w"
   else
     _df_build_system p_system "$body_w"
     _df_build_distro p_distro "$body_w"
@@ -610,7 +668,7 @@ _df_indent_pair() {
 _df_build_system() {
   local -n _out="$1"
   local w="$2"
-  _df_panel _out SYSTEM "$w" 9 \
+  _df_panel _out SYSTEM "$w" 9 - \
     "OS${DF_FS}$(detect_os)" \
     "Kernel${DF_FS}$(detect_kernel)" \
     "Arch${DF_FS}$(detect_arch)" \
@@ -635,7 +693,7 @@ _df_build_distro() {
     *) level="" ;;
   esac
 
-  _df_panel _out DISTRIBUTION "$w" 9 \
+  _df_panel _out DISTRIBUTION "$w" 9 - \
     "ID${DF_FS}$DF_D_ID" \
     "Version${DF_FS}${version:-rolling}" \
     "Codename${DF_FS}${codename:-none}" \
@@ -647,6 +705,10 @@ _df_build_cpu() {
   local -n _out="$1"
   local w="$2"
   local arch_row arch launched process microline
+  local vendor ordinal gen_row gen_label gen_year
+  local latest latest_o latest_label latest_year genline behind
+
+  vendor="$(detect_cpu_vendor)"
 
   arch_row="$(hwdata_cpu_arch "$(detect_cpu_vendor_id)" \
     "$(detect_cpu_family)" "$(detect_cpu_model_id)")"
@@ -661,15 +723,76 @@ _df_build_cpu() {
     microline="not in the bundled table"
   fi
 
-  _df_panel _out PROCESSOR "$w" 10 \
+  # --- generation, and how far behind it is ---
+  ordinal="$(hwdata_cpu_gen_ordinal "$(detect_cpu_model_name)" \
+    "$(detect_cpu_vendor_id)" "$(detect_cpu_family)" "$(detect_cpu_model_id)")"
+  gen_row="$(hwdata_cpu_generation "$vendor" "$ordinal")"
+  IFS='|' read -r gen_label gen_year <<<"$gen_row"
+
+  latest="$(hwdata_cpu_latest_generation "$vendor")"
+  IFS='|' read -r latest_o latest_label latest_year <<<"$latest"
+
+  if [ -n "$gen_label" ]; then
+    genline="$gen_label"
+    [ -n "$gen_year" ] && genline="$genline, released $gen_year"
+  elif [ -n "$ordinal" ]; then
+    # An ordinal with no row: the part reports a generation the table has not caught up
+    # with, which is worth saying plainly rather than hiding.
+    genline="generation $ordinal, not yet in the bundled table"
+  else
+    genline="not on the consumer generation ladder"
+  fi
+
+  # The vendor logo costs 22 columns. Below this the values start clipping to make
+  # room for it, and a legible fact beats a legible logo — so the art is the thing
+  # that goes, the same way the distro column drops out on a narrow terminal.
+  local art=DF_CPU_LOGO_LINES
+  if [ "$w" -lt 86 ]; then
+    art='-'
+  fi
+
+  _df_panel _out PROCESSOR "$w" 10 "$art" \
     "Model${DF_FS}$(detect_cpu)" \
-    "Vendor${DF_FS}$(detect_cpu_vendor)" \
+    "Vendor${DF_FS}$vendor" \
+    "Generation${DF_FS}$genline" \
+    "$(_df_currency_row "$ordinal" "$latest_o" "$latest_label" "$latest_year")" \
     "Micro-arch${DF_FS}$microline" \
     "Signature${DF_FS}$(detect_cpu_signature)" \
     "Topology${DF_FS}$(detect_cpu_topology)" \
     "Clock${DF_FS}$(detect_cpu_freq)" \
     "Cache${DF_FS}$(detect_cpu_cache)" \
     "Features${DF_FS}$(detect_cpu_features)"
+}
+
+# The "N generations behind" row.
+#
+# The comparison target is named rather than just counted, because the count is only as
+# current as lib/data/cpu-generations.tsv: a stale table under-reports, and "3 behind
+# Core Ultra Series 2 (2024)" lets the reader notice that the basis is out of date in a
+# way that a bare "3 generations behind" does not.
+_df_currency_row() {
+  local ordinal="$1" latest_o="$2" latest_label="$3" latest_year="$4"
+  local behind level=""
+
+  if [ -z "$ordinal" ] || [ -z "$latest_o" ]; then
+    printf 'Currency%sunknown' "$DF_FS"
+    return 0
+  fi
+
+  behind=$((latest_o - ordinal))
+  if [ "$behind" -le 0 ]; then
+    printf 'Currency%scurrent — %s is the newest known generation' \
+      "$DF_FS" "$latest_label"
+    return 0
+  fi
+
+  # Four generations is roughly six years of Intel or eight of AMD: far enough that
+  # security and performance guidance written today assumes something newer.
+  [ "$behind" -ge 4 ] && level=warn
+
+  printf '%s%s%s generation%s behind %s (%s)%s%s' \
+    Currency "$DF_FS" "$behind" "$([ "$behind" -eq 1 ] || printf 's')" \
+    "$latest_label" "$latest_year" "$DF_FS" "$level"
 }
 
 _df_build_memory() {
@@ -708,13 +831,13 @@ _df_build_memory() {
     rows+=("Modules${DF_FS}$(dmi_raw_reason)${DF_FS}warn")
   fi
 
-  _df_panel _out MEMORY "$w" 9 "${rows[@]}"
+  _df_panel _out MEMORY "$w" 9 - "${rows[@]}"
 }
 
 _df_build_machine() {
   local -n _out="$1"
   local w="$2"
-  _df_panel _out MACHINE "$w" 9 \
+  _df_panel _out MACHINE "$w" 9 - \
     "Model${DF_FS}$(detect_machine)" \
     "Board${DF_FS}$(detect_board)" \
     "Firmware${DF_FS}$(detect_bios)"
@@ -746,6 +869,7 @@ render_plain() {
   _df_plain_field 'Released:' "$(hwdata_distro_released "$DF_D_ID" "$DF_D_VERSION")"
   _df_plain_field 'Support:' "$support"
   _df_plain_field 'CPU:' "$(detect_cpu)"
+  _df_plain_field 'CPU gen:' "$(_df_plain_generation)"
   _df_plain_field 'Cores:' "$(detect_cpu_topology)"
   _df_plain_field 'Clock:' "$(detect_cpu_freq)"
   _df_plain_field 'Cache:' "$(detect_cpu_cache)"
@@ -753,6 +877,27 @@ render_plain() {
   _df_plain_field 'Swap:' "$(detect_swap)"
   _df_plain_field 'Machine:' "$(detect_machine)"
   _df_plain_field 'Firmware:' "$(detect_bios)"
+}
+
+# The generation facts as one line, for the plain report.
+_df_plain_generation() {
+  local vendor ordinal gen_row gen_label gen_year latest latest_o latest_label out=""
+  vendor="$(detect_cpu_vendor)"
+  ordinal="$(hwdata_cpu_gen_ordinal "$(detect_cpu_model_name)" \
+    "$(detect_cpu_vendor_id)" "$(detect_cpu_family)" "$(detect_cpu_model_id)")"
+  [ -n "$ordinal" ] || return 0
+
+  gen_row="$(hwdata_cpu_generation "$vendor" "$ordinal")"
+  IFS='|' read -r gen_label gen_year <<<"$gen_row"
+  [ -n "$gen_label" ] || return 0
+  out="$gen_label ($gen_year)"
+
+  latest="$(hwdata_cpu_latest_generation "$vendor")"
+  IFS='|' read -r latest_o latest_label _ <<<"$latest"
+  if [ -n "$latest_o" ] && [ "$latest_o" -gt "$ordinal" ]; then
+    out="$out, $((latest_o - ordinal)) behind $latest_label"
+  fi
+  printf '%s' "$out"
 }
 
 _df_plain_field() {

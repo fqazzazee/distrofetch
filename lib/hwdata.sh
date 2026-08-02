@@ -185,13 +185,107 @@ hwdata_cpu_arch() {
   [ -n "$vendor" ] && [ -n "$family" ] || return 0
   for want in "$model" '*'; do
     while IFS= read -r line; do
-      IFS=$'\t' read -r f_v f_f f_m arch launched process <<<"$line"
+      # Seven names for seven columns: read folds every trailing field into the last
+      # variable, so omitting the gen column here appends it to the process node.
+      IFS=$'\t' read -r f_v f_f f_m arch launched process _ <<<"$line"
       if [ "$f_v" = "$vendor" ] && [ "$f_f" = "$family" ] && [ "$f_m" = "$want" ]; then
         printf '%s|%s|%s' "$arch" "$launched" "$process"
         return 0
       fi
     done < <(_hw_table cpu-arch.tsv || true)
   done
+}
+
+# The generation ordinal for a CPU, or nothing.
+#
+# The model *string* wins where it carries an explicit marker, because family/model
+# cannot always tell generations apart: Intel's 14th Gen desktop is Raptor Lake
+# refreshed, so 13th and 14th Gen share model 183. The string says which one it is.
+# Everything else falls back to the `gen` column of cpu-arch.tsv.
+hwdata_cpu_gen_ordinal() {
+  local model_name="$1" vendor="$2" family="$3" model="$4"
+  local want line f_v f_f f_m gen
+
+  # "13th Gen Intel(R) Core(TM) i7-1360P" -> 13. Intel has printed this marker in the
+  # brand string since Skylake, and it is the only self-describing source available.
+  case "$model_name" in
+    *[0-9]'th Gen'* | *[0-9]'st Gen'* | *[0-9]'nd Gen'* | *[0-9]'rd Gen'*)
+      gen="${model_name%%th Gen*}"
+      gen="${gen%%st Gen*}"
+      gen="${gen%%nd Gen*}"
+      gen="${gen%%rd Gen*}"
+      gen="${gen##* }"
+      case "$gen" in
+        '' | *[!0-9]*) ;;
+        *)
+          printf '%s' "$gen"
+          return 0
+          ;;
+      esac
+      ;;
+  esac
+
+  [ -n "$vendor" ] && [ -n "$family" ] || return 0
+  for want in "$model" '*'; do
+    while IFS= read -r line; do
+      IFS=$'\t' read -r f_v f_f f_m _ _ _ gen <<<"$line"
+      if [ "$f_v" = "$vendor" ] && [ "$f_f" = "$family" ] && [ "$f_m" = "$want" ]; then
+        if [ -n "$gen" ] && [ "$gen" != '-' ]; then
+          printf '%s' "$gen"
+        fi
+        return 0
+      fi
+    done < <(_hw_table cpu-arch.tsv || true)
+  done
+}
+
+# label|year for a vendor's generation ordinal, or nothing.
+hwdata_cpu_generation() {
+  local vendor="$1" ordinal="$2" line f_v f_o label year
+  [ -n "$vendor" ] && [ -n "$ordinal" ] || return 0
+  while IFS= read -r line; do
+    IFS=$'\t' read -r f_v f_o label year <<<"$line"
+    if [ "$f_v" = "$vendor" ] && [ "$f_o" = "$ordinal" ]; then
+      printf '%s|%s' "$label" "$year"
+      return 0
+    fi
+  done < <(_hw_table cpu-generations.tsv || true)
+}
+
+# ordinal|label|year of the newest generation this table knows about for a vendor.
+#
+# Derived from the table's own maximum rather than a constant, so adding a generation
+# is one line and every "N behind" recalculates. A stale table therefore *under*-reports
+# how far behind a part is, which is why callers report the comparison basis by name.
+hwdata_cpu_latest_generation() {
+  local vendor="$1" line f_v f_o label year
+  local best_o="" best_label="" best_year=""
+  [ -n "$vendor" ] || return 0
+  while IFS= read -r line; do
+    IFS=$'\t' read -r f_v f_o label year <<<"$line"
+    [ "$f_v" = "$vendor" ] || continue
+    case "$f_o" in
+      '' | *[!0-9]*) continue ;;
+    esac
+    if [ -z "$best_o" ] || [ "$f_o" -gt "$best_o" ]; then
+      best_o="$f_o"
+      best_label="$label"
+      best_year="$year"
+    fi
+  done < <(_hw_table cpu-generations.tsv || true)
+  if [ -n "$best_o" ]; then
+    printf '%s|%s|%s' "$best_o" "$best_label" "$best_year"
+  fi
+}
+
+# The vendor logo file name. Unlike distro logos this is a closed set — there are two
+# x86 vendors — so anything else gets the generic chip rather than a name lookup.
+hwdata_cpu_logo_name() {
+  case "$1" in
+    Intel) printf 'intel' ;;
+    AMD) printf 'amd' ;;
+    *) printf 'generic' ;;
+  esac
 }
 
 # --- logos -----------------------------------------------------------------

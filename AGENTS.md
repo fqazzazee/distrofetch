@@ -64,6 +64,13 @@ the same make target you just ran.
 - Bundled tables in `lib/data/` are snapshots. A live source always wins; a miss prints
   `unknown`. Never fill a gap with arithmetic or a policy rule — a visible gap is a bug
   report, a confident wrong date is not.
+- `cpu-generations.tsv` defines "latest" by its own highest ordinal. Never hardcode the
+  newest generation anywhere; adding a row must be the whole change. And never print a
+  bare "N behind" — name the generation being compared against, so a stale table shows
+  up in the output instead of quietly under-reporting.
+- Adding a column to a `.tsv` means fixing every `read` that parses it. `read` folds all
+  trailing fields into its last variable, so a missed call site appends the new column
+  to an existing value rather than erroring.
 - The SMBIOS parser reads firmware-controlled binary data. Bounds-check every offset,
   treat every field as data, and never read offset 0x18 (the module serial).
 

@@ -1,0 +1,53 @@
+# Consumer CPU generations, in release order.
+#
+# Columns, tab-separated:
+#   vendor  ordinal  label  year
+#
+#   vendor   Intel | AMD, matching what detect_cpu_vendor prints
+#   ordinal  position in the release sequence, 1 = oldest listed
+#   label    what the generation is called in the market
+#   year     the year the generation launched, not the year a given part did
+#
+# The ordinal exists because "how many generations behind am I" is the question this
+# table answers, and the marketing names cannot be subtracted: Intel ran 1st through
+# 14th Gen and then restarted at "Core Ultra Series 1", and AMD's Ryzen model numbers
+# skip (there is no mainstream desktop 4000 or 6000 series). An ordinal sequence is the
+# only thing that supports arithmetic.
+#
+# **The newest row in this file defines "latest".** Nothing hardcodes it, so adding a
+# generation is one line and every "N behind" recalculates. The consequence of *not*
+# adding it is that the count silently under-reports — which is why the dashboard names
+# the generation it is comparing against instead of only printing a number, and why
+# distrofetch says "latest known" rather than "latest".
+#
+# Server lines (Xeon Scalable, EPYC) are deliberately absent: they have their own naming
+# and do not sit on this ladder. A part whose microarchitecture has no generation maps
+# to `-` in cpu-arch.tsv and the dashboard says so.
+#
+# Data as of: 2026-08-02. Confirm against Intel ARK and AMD's product pages before
+# adding a row; an unconfirmed generation left out only under-reports, one added wrongly
+# tells everyone they are further behind than they are.
+
+Intel	1	1st Gen Core	2010
+Intel	2	2nd Gen Core	2011
+Intel	3	3rd Gen Core	2012
+Intel	4	4th Gen Core	2013
+Intel	5	5th Gen Core	2015
+Intel	6	6th Gen Core	2015
+Intel	7	7th Gen Core	2016
+Intel	8	8th Gen Core	2017
+Intel	9	9th Gen Core	2018
+Intel	10	10th Gen Core	2019
+Intel	11	11th Gen Core	2020
+Intel	12	12th Gen Core	2021
+Intel	13	13th Gen Core	2022
+Intel	14	14th Gen Core	2023
+Intel	15	Core Ultra Series 1	2023
+Intel	16	Core Ultra Series 2	2024
+
+AMD	1	Ryzen 1000 (Zen)	2017
+AMD	2	Ryzen 2000 (Zen+)	2018
+AMD	3	Ryzen 3000 (Zen 2)	2019
+AMD	4	Ryzen 5000 (Zen 3)	2020
+AMD	5	Ryzen 7000 (Zen 4)	2022
+AMD	6	Ryzen 9000 (Zen 5)	2024

@@ -70,6 +70,7 @@ install: ## Install to PREFIX (default /usr/local)
 	for f in $(LIBS); do install -Dm644 "$$f" "$(LIBDIR)/$$(basename $$f)"; done
 	for f in lib/data/*.tsv; do install -Dm644 "$$f" "$(LIBDIR)/data/$$(basename $$f)"; done
 	for f in lib/logos/*.txt; do install -Dm644 "$$f" "$(LIBDIR)/logos/$$(basename $$f)"; done
+	for f in lib/cpu-logos/*.txt; do install -Dm644 "$$f" "$(LIBDIR)/cpu-logos/$$(basename $$f)"; done
 
 uninstall: ## Remove an installed copy
 	rm -f $(BINDIR)/distrofetch
