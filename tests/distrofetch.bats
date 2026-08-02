@@ -67,6 +67,55 @@ setup() {
   done
 }
 
+# bats captures output through a pipe, so every case below runs with stdout off a TTY.
+# That is exactly the condition --color=always exists to override.
+
+@test "--color=always emits escapes even off a terminal" {
+  run "$DF" --color=always
+  [ "$status" -eq 0 ]
+  [[ "$output" == *$'\033'* ]]
+}
+
+@test "--color=never emits no escapes" {
+  run "$DF" --color=never
+  [ "$status" -eq 0 ]
+  [[ "$output" != *$'\033'* ]]
+}
+
+@test "--color=auto is plain off a terminal" {
+  run "$DF" --color=auto
+  [ "$status" -eq 0 ]
+  [[ "$output" != *$'\033'* ]]
+}
+
+@test "--color accepts a space-separated value" {
+  run "$DF" --color always
+  [ "$status" -eq 0 ]
+  [[ "$output" == *$'\033'* ]]
+}
+
+@test "--color rejects an unknown value and names the valid ones" {
+  run "$DF" --color=sometimes
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"always"* ]]
+  [[ "$output" == *"never"* ]]
+  [[ "$output" == *"auto"* ]]
+}
+
+@test "--color requires a value" {
+  run "$DF" --color
+  [ "$status" -eq 2 ]
+}
+
+# The rain positions the cursor and clears the screen; forcing color must not smuggle
+# that into a pipe.
+@test "--color=always does not enable the animation off a terminal" {
+  run "$DF" --color=always --duration 5
+  [ "$status" -eq 0 ]
+  [[ "$output" != *$'\033[2J'* ]]
+  [[ "$output" != *$'\033[?25l'* ]]
+}
+
 @test "--no-color emits no ANSI escapes" {
   run "$DF" --no-color
   [ "$status" -eq 0 ]

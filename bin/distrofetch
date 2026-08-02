@@ -47,7 +47,8 @@ Usage: distrofetch [options]
 Options:
   -d, --duration N   seconds of rain before the report settles (default: 0)
   -n, --no-rain      skip the animation; the default, kept for explicitness
-  -c, --no-color     disable ANSI color (implies --no-rain)
+      --color=WHEN   always, never, or auto (default: auto)
+  -c, --no-color     alias for --color=never
   -v, --version      print version and exit
   -h, --help         print this help and exit
 
@@ -56,8 +57,13 @@ seconds is a long time to wait. Turn it on with -d:
 
   distrofetch -d 2
 
-Both the animation and color switch off automatically when stdout is not a
-terminal, so piped and redirected output is always plain text.
+Color defaults to auto: on for a terminal, off for a pipe or a file, so
+redirected output is plain text. Force it when the consumer understands ANSI:
+
+  distrofetch --color=always | less -R
+
+--color=always never enables the animation. Cursor positioning needs a real
+terminal, so the rain is skipped off a TTY no matter what color says.
 
 Exit status: 0 on success, 2 on a usage error.
 EOF
@@ -65,15 +71,19 @@ EOF
 
 main() {
   # Rain is opt-in: a duration of 0 means no animation at all.
-  local rain=1 color=1 duration=0
+  # Color is resolved after parsing, since auto depends on the TTY check below.
+  local rain=1 color=1 duration=0 color_mode=auto
 
   while [ $# -gt 0 ]; do
     case "$1" in
       -n | --no-rain) rain=0 ;;
-      -c | --no-color)
-        color=0
-        rain=0
+      --color=*) color_mode="${1#--color=}" ;;
+      --color)
+        [ $# -ge 2 ] || die "--color needs a value: always, never, or auto"
+        color_mode="$2"
+        shift
         ;;
+      -c | --no-color) color_mode=never ;;
       -d | --duration)
         [ $# -ge 2 ] || die "--duration needs a value"
         duration="$2"
@@ -106,12 +116,21 @@ main() {
     rain=0
   fi
 
-  # Nothing to animate into if stdout is a pipe, a file, or a CI log — and nothing that
-  # would render color, either. Both go off together so redirected output is plain text.
+  # The animation is gated on a real terminal regardless of --color: it positions the
+  # cursor and clears the screen, which is meaningless in a pipe or a CI log.
   if [ ! -t 1 ]; then
     rain=0
-    color=0
   fi
+
+  case "$color_mode" in
+    always) color=1 ;;
+    never) color=0 ;;
+    auto)
+      # Plain text for anything that is not a terminal.
+      if [ -t 1 ]; then color=1; else color=0; fi
+      ;;
+    *) die "--color must be always, never, or auto (got: $color_mode)" ;;
+  esac
 
   render_init "$color"
   if [ "$rain" -eq 1 ]; then
