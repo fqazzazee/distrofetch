@@ -66,8 +66,12 @@ Memory:    6.9 GiB / 15.2 GiB
 ```
 
 Both the animation and color switch off automatically whenever stdout is not a terminal,
-so piping and redirecting are always safe — no escape sequences end up in your file. There
-is no `--color=always` override; if you want color through a pager, ask for one.
+so piping and redirecting are safe by default — no escape sequences end up in your file.
+When the consumer does understand ANSI, override it:
+
+```bash
+distrofetch --color=always | less -R
+```
 
 ## Options
 
@@ -75,11 +79,17 @@ is no `--color=always` override; if you want color through a pager, ask for one.
 |---|---|---|
 | `-d`, `--duration N` | `0` | Seconds of rain before the report settles; `0` means none |
 | `-n`, `--no-rain` | | Skip the animation — the default, kept for explicitness |
-| `-c`, `--no-color` | off | Disable ANSI color; implies `--no-rain` |
+| `--color=WHEN` | `auto` | `always`, `never`, or `auto` (on for a terminal, off otherwise) |
+| `-c`, `--no-color` | | Alias for `--color=never` |
 | `-v`, `--version` | | Print the version and exit |
 | `-h`, `--help` | | Print help and exit |
 
+`--color` accepts either form: `--color=always` or `--color always`.
+
 Exit status is `0` on success and `2` on a usage error.
+
+`--color=always` never turns the animation on. The rain positions the cursor and clears
+the screen, so it needs a real terminal regardless of what color is set to.
 
 The animation is off by default because the common case is a shell startup file, where two
 seconds is a long time to wait for your prompt. Alias `distrofetch -d 2` if you want the

@@ -36,17 +36,23 @@ fresh install and wants the specs without installing a toolchain first.
    **and color** automatically, so piped and redirected output contains no escape
    sequences. Skipping only the animation is not enough — color alone still writes
    escapes into the file.
-5. Disable all color on request, producing plain ASCII output.
-6. Exit `0` on success and `2` on a usage error, writing usage errors to stderr.
-7. Select the package-count backend from what is present on the system: pacman, then
+5. Resolve color from `--color=WHEN`, where `WHEN` is `always`, `never`, or `auto`, and
+   `auto` is the automatic behavior in 4. `--no-color` is an alias for `never`. Reject any
+   other value with a usage error that names the three valid ones.
+6. Gate the animation on a real terminal independently of color. `--color=always` forces
+   escapes into a pipe by request; it must never force cursor positioning or a screen
+   clear into one.
+7. Exit `0` on success and `2` on a usage error, writing usage errors to stderr.
+8. Select the package-count backend from what is present on the system: pacman, then
    dpkg, then rpm.
-8. Restore the cursor and reset the terminal if interrupted mid-animation.
-9. Run from a source checkout and from an installed prefix without configuration.
+9. Restore the cursor and reset the terminal if interrupted mid-animation.
+10. Run from a source checkout and from an installed prefix without configuration.
 
 ## UX
 
 ```
-distrofetch [-d|--duration N] [-n|--no-rain] [-c|--no-color] [-v|--version] [-h|--help]
+distrofetch [-d|--duration N] [-n|--no-rain] [--color=WHEN] [-c|--no-color]
+            [-v|--version] [-h|--help]
 ```
 
 Bare `distrofetch` prints the report and nothing else. `distrofetch -d 2` is the full
