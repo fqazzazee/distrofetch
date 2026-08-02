@@ -54,11 +54,17 @@ nothing on a machine where it is unwanted.
 fading tail; the animation runs at a stable frame rate in a 200-column terminal without
 pegging a core; `--no-rain` and non-TTY output are provably escape-free.
 
-- [ ] Column-based trails with a lit head and a decaying tail, replacing scattered glyphs
-- [ ] Frame budget instead of a fixed `sleep 0.02`, so wide terminals do not stutter
+- [x] Column-based trails with a lit head and a decaying tail, replacing scattered glyphs
+- [x] Degrade to ASCII when the locale cannot render half-width katakana
+- [x] Measure it: 2 seconds of rain costs ~0.24s CPU at 80 columns and ~0.73s at 200 —
+      roughly 12% and 36% of one core, measured with `times` under a pty
+- [x] Run on the alternate screen buffer so the animation does not destroy scrollback
+- [x] Wordmark banner and a frame around the report, `--no-art` to suppress
+- [x] Values resolve out of noise after the rain instead of appearing all at once
+- [ ] Frame budget instead of a fixed `sleep 0.045`, so wide terminals do not stutter
 - [ ] Handle `SIGWINCH` mid-animation
-- [ ] Degrade to ASCII when the locale or font cannot render half-width katakana
-- [ ] Measure it: CPU time for a 2-second run, recorded in the PR
+- [ ] Font fallback: a UTF-8 locale does not prove the font has katakana. A terminal
+      without it shows tofu, and nothing here detects that
 
 ---
 

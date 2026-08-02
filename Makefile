@@ -13,7 +13,7 @@ VERSION := $(shell sed -n 's/^DISTROFETCH_VERSION="\(.*\)"$$/\1/p' bin/distrofet
 BINDIR := $(DESTDIR)$(PREFIX)/bin
 LIBDIR := $(DESTDIR)$(PREFIX)/lib/distrofetch
 
-SCRIPTS := bin/distrofetch lib/detect.sh lib/render.sh
+SCRIPTS := bin/distrofetch lib/detect.sh lib/render.sh scripts/banner.sh
 SHFMT_FLAGS := -i 2 -ci -bn
 
 .DEFAULT_GOAL := help

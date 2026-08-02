@@ -8,16 +8,40 @@ report of what the machine actually is.
 
 ## What it does
 
-Prints your OS, kernel, architecture, uptime, package count, shell, CPU, and memory,
-introduced by a short rain of katakana glyphs. It reads `/etc/os-release`, `/proc`, and
-your package manager's database — nothing else. No network calls, no writes, no root.
+Prints your OS, kernel, architecture, uptime, package count, shell, CPU, and memory in a
+framed report under a block wordmark, optionally introduced by a rain of katakana glyphs.
+It reads `/etc/os-release`, `/proc`, and your package manager's database — nothing else.
+No network calls, no writes, no root.
+
+```
+┌────────────────────────────────────────────────────────┐
+│ ███  ████ ████ ████ ███  ████ ████ ████ ████ ████ █  █ │
+│ █  █  ██  █     ██  █  █ █  █ █    █     ██  █    █  █ │
+│ █  █  ██  ████  ██  ███  █  █ ███  ███   ██  █    ████ │
+│ █  █  ██     █  ██  █ █  █  █ █    █     ██  █    █  █ │
+│ ███  ████ ████  ██  █  █ ████ █    ████  ██  ████ █  █ │
+│ tesla@workstation                                      │
+├────────────────────────────────────────────────────────┤
+│ OS:        Fedora Linux 44 (Workstation Edition)       │
+│ Kernel:    Linux 7.1.5-201.fc44.x86_64                 │
+│ Arch:      x86_64                                      │
+│ Uptime:    2d 7h 15m                                   │
+│ Packages:  2809 (rpm)                                  │
+│ Shell:     bash                                        │
+│ CPU:       13th Gen Intel(R) Core(TM) i7-1360P (16)    │
+│ Memory:    6.9 GiB / 15.2 GiB                          │
+└────────────────────────────────────────────────────────┘
+```
+
+The banner and frame cost nothing — they print immediately. `--no-art` drops both, and
+they drop themselves on a terminal too narrow to hold them.
 
 It is a single Bash script with no runtime dependencies beyond coreutils, which is the
 point: it runs on the minimal container or the freshly-installed box where you have not
 yet installed anything, and it is short enough to read before you run it.
 
-It does not try to be neofetch. There is no ASCII distro logo, no image protocol, no
-configuration file, and no plugin system.
+It does not try to be neofetch. There is no per-distro logo library, no image protocol,
+no configuration file, and no plugin system.
 
 ## Install
 
@@ -48,11 +72,25 @@ x86_64. Linux only — the probes read `/proc`, which macOS and the BSDs do not 
 $ distrofetch
 ```
 
-The report prints immediately. The animation is opt-in — `distrofetch -d 2` rains glyphs
-for two seconds first, then settles into the same report:
+The report prints immediately. The animation is opt-in:
 
 ```console
-$ distrofetch --no-color
+$ distrofetch -d 2
+```
+
+That gives you two seconds of rain — columns of glyphs falling with a white leading
+character and a tail that fades through five greens — after which the banner assembles a
+row at a time and each value resolves out of the noise into the real thing.
+
+The rain runs on the alternate screen buffer, so whatever was in your terminal is still
+there when it finishes; the report then prints into your normal scrollback where it
+stays. Ctrl-C mid-animation puts everything back.
+
+`--no-art` gives you the bare lines, which is what you want if something is reading the
+output:
+
+```console
+$ distrofetch --no-art --no-color
 tesla@workstation
 ────────────────────────────────
 OS:        Fedora Linux 44 (Workstation Edition)
@@ -79,6 +117,7 @@ distrofetch --color=always | less -R
 |---|---|---|
 | `-d`, `--duration N` | `0` | Seconds of rain before the report settles; `0` means none |
 | `-n`, `--no-rain` | | Skip the animation — the default, kept for explicitness |
+| `--no-art` | | Plain `Label: value` lines: no banner, no frame |
 | `--color=WHEN` | `auto` | `always`, `never`, or `auto` (on for a terminal, off otherwise) |
 | `-c`, `--no-color` | | Alias for `--color=never` |
 | `-v`, `--version` | | Print the version and exit |
@@ -88,12 +127,18 @@ distrofetch --color=always | less -R
 
 Exit status is `0` on success and `2` on a usage error.
 
-`--color=always` never turns the animation on. The rain positions the cursor and clears
-the screen, so it needs a real terminal regardless of what color is set to.
+`--color=always` never turns the animation on. The rain positions the cursor and switches
+screen buffers, so it needs a real terminal regardless of what color is set to.
 
 The animation is off by default because the common case is a shell startup file, where two
 seconds is a long time to wait for your prompt. Alias `distrofetch -d 2` if you want the
 full effect on demand.
+
+Terminal width comes from `COLUMNS` if it is set, then `tput cols`, then 80. Export
+`COLUMNS` if you are running under something that does not.
+
+Outside a UTF-8 locale the rain falls back to an ASCII glyph set, because Bash slices
+strings by byte there and half-width katakana would come apart into mojibake.
 
 ## Development
 
@@ -108,6 +153,10 @@ make smoke         # run the real entry point against this machine
 `lib/detect.sh` holds the probes and `lib/render.sh` holds the output layer; the split
 exists so detection can be tested without a terminal. Every probe prints one line and
 returns `unknown` rather than failing, which is what keeps the renderer simple.
+
+The banner is five rows of block characters that have to stay column-aligned.
+`scripts/banner.sh` composes them from a per-letter table and prints them ready to paste
+into `lib/render.sh` — run it rather than counting spaces if you change the wordmark.
 
 See [`SPEC.md`](SPEC.md) for the design and [`ROADMAP.md`](ROADMAP.md) for what is
 planned.

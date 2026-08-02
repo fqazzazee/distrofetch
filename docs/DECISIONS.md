@@ -8,6 +8,34 @@ decision, it is a preference.
 
 ---
 
+## 2026-08-01 — The banner and frame are on by default; the animation stays opt-in
+
+**Status:** accepted
+
+**Context:** The tool looked like `uname -a` with colors. The visual identity was entirely
+in the rain, and the rain is off by default — so the thing people actually see was the
+plain part. Two ways to fix that: turn the rain on by default, or make the still frame
+worth looking at.
+
+**Decision:** A `DISTROFETCH` wordmark and a box frame print every time, because they cost
+no wall-clock time. The rain and the value reveal stay behind `-d`. `--no-art` turns the
+static art off.
+
+**Alternatives:** Defaulting `-d` to 2 seconds. Rejected for the same reason as the
+[previous decision](#2026-08-01--the-animation-is-opt-in-default-duration-0) — a delay in
+a shell startup file is uninstalled, not configured. Also considered a neofetch-style
+per-distro logo panel, rejected as an explicit non-goal: the wordmark is five constant
+rows and does not grow when a new distro ships.
+
+**Consequences:** Default output went from 10 lines to 18, and its shape changed for
+anything already parsing it — this is pre-1.0, but `--no-art` exists so the change is
+recoverable without a revert. Frame width is now computed from the widest field, so a
+long CPU model widens the box; below the frame's width the art turns itself off, which
+means output shape now depends on `COLUMNS`. Adding a field means checking the alignment
+tests, not just the probe tests.
+
+---
+
 ## 2026-08-01 — The animation is opt-in, default duration 0
 
 **Status:** accepted

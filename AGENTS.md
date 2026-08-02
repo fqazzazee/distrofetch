@@ -46,9 +46,16 @@ the same make target you just ran.
   handling, and breaking it breaks the renderer silently.
 - Anything printed to a terminal must have a non-TTY path. Check `[ -t 1 ]`, do not
   assume.
-- New probe means: a function in `detect.sh`, a line in `render_report`, a case in the
-  bats shape test, and a label in the smoke workflow's field list. All four, or the
-  smoke test passes while the feature is missing.
+- New probe means: a function in `detect.sh`, an entry in `_df_collect`'s two parallel
+  arrays, a case in the bats shape test, a label in the smoke workflow's field list, and
+  a bump to the plain-line count that workflow asserts. All five, or the smoke test
+  passes while the feature is missing.
+- The report is drawn twice from the same data: once framed, once plain. Anything that
+  changes a line's visible width has to go through `_df_boxed`, which is told the width
+  separately because `${#}` counts ANSI escapes and multibyte characters wrong.
+- `${#str}` counts bytes outside a UTF-8 locale. Never measure the banner or the frame
+  with it — the banner's width is the constant `DF_BANNER_WIDTH`, and the frame is built
+  by repetition so its width is known rather than measured.
 
 ## Do not
 
