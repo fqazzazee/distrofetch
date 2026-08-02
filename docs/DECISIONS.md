@@ -8,6 +8,39 @@ decision, it is a preference.
 
 ---
 
+## 2026-08-02 — The generation table is checked against the vendors, and says when
+
+**Status:** accepted — amends "Generation currency, with the comparison basis named"
+
+**Context:** The currency figure was reported as out of date, and it was: Intel had
+shipped Core Ultra Series 3 and the table stopped at Series 2, so every Intel machine
+was told it was one generation newer than it is. The table also carried a `Data as of:`
+line that recorded when the file was *edited* — by me, from memory, with no source
+consulted — which made it look verified when nothing had been.
+
+**Decision:** `scripts/refresh-cpu-generations.sh` compares the table against
+ark.intel.com and amd.com and exits non-zero when the table is behind. The header line
+becomes `Verified against vendor sites:` and means exactly that. The missing Intel row
+was added from ARK: series page 245528, earliest launch quarter Q1'26.
+
+**Alternatives:** Having the script rewrite the table — rejected. The ordinal is a
+position in a release sequence, and both vendors break the sequence: Intel restarted at
+"Core Ultra Series 1" after 14th Gen, AMD has no mainstream desktop 4000 or 6000 series.
+A scrape cannot make that call, and a wrong ordinal over-reports how far behind someone
+is, which is the worse direction. Running it in CI — rejected: CI would then depend on
+two marketing sites being up, and a build that goes red because of an Akamai hiccup
+teaches people to ignore red builds. Fetching at runtime — rejected outright; "no network
+calls" is a promise in the README and the reason this is safe to run on a box you do not
+trust.
+
+**Consequences:** Someone still has to run it, and nothing forces them to. What changed
+is that the table can no longer *claim* to be current without having been checked, and
+the check is one command. Two vendor quirks are now encoded in the script because they
+look like network faults otherwise: Intel's edge serves curl's own user agent and 403s a
+spoofed browser one, and AMD's does the reverse.
+
+---
+
 ## 2026-08-02 — Wrapping replaces truncation, and fitting becomes opt-in
 
 **Status:** accepted — supersedes "The dashboard fits the terminal by dropping detail"

@@ -18,8 +18,8 @@ Current phase only. See `ROADMAP.md` for the phase and its exit condition.
 
 - [ ] Add Fedora and Arch release dates to `lib/data/distro-releases.tsv`; both report
       `Released: unknown` today
-- [ ] Confirm `cpu-generations.tsv` is current before release — a missing newest row
-      makes every "N generations behind" under-report
+- [ ] Run `make check-data` before each release; it is the only thing that keeps the
+      currency figure honest, and nothing forces it
 - [ ] Warn when a bundled table's `Data as of:` date is more than a year old
 - [ ] Run `distrofetch` on a machine with a discrete GPU and on one with a Thunderbolt
       dock attached; both paths are fixture-tested only
