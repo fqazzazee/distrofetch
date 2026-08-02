@@ -353,7 +353,9 @@ _ghz() {
 detect_cpu_cache() {
   local d level type size out="" label
   for d in /sys/devices/system/cpu/cpu0/cache/index*; do
-    [ -r "$d/level" ] && [ -r "$d/size" ] || continue
+    if [ ! -r "$d/level" ] || [ ! -r "$d/size" ]; then
+      continue
+    fi
     read -r level <"$d/level" || continue
     read -r size <"$d/size" || continue
     type=""

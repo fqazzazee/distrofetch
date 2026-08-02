@@ -77,7 +77,12 @@ _df_dmi_load() {
   _df_dmi_bytes=()
   [ -r "$file" ] || return 1
   while read -r b; do
-    [ -n "$b" ] && _df_dmi_bytes+=("$b")
+    # An `if`, not `[ -n "$b" ] && ...`: as the last statement in the loop body that
+    # would leave the loop returning 1 on a trailing blank line, and set -e would take
+    # the caller down with it.
+    if [ -n "$b" ]; then
+      _df_dmi_bytes+=("$b")
+    fi
   done < <(od -An -v -tu1 -w1 "$file" 2>/dev/null | tr -d ' ')
   [ "${#_df_dmi_bytes[@]}" -ge 4 ] || return 1
 }

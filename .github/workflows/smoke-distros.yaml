@@ -53,6 +53,11 @@ jobs:
         run: make install PREFIX=/usr/local
 
       - name: smoke
+        # Explicit, because the default shell inside a container is /bin/sh. On Debian
+        # 13 that is dash 0.5.12, which added `set -o pipefail` — so the guard at the
+        # top of this script succeeds and the first process substitution fails fifty
+        # lines later, which looks like a distrofetch bug rather than a shell mismatch.
+        shell: bash
         run: |
           set -euo pipefail
           # Exercise the installed entry point from outside the source tree, so a
