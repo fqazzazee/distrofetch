@@ -110,9 +110,22 @@ jobs:
 
           # The logo is picked from ID= in /etc/os-release. A wrong pick is silent
           # otherwise: every distro would still render, just wearing the wrong face.
-          COLUMNS=140 distrofetch --no-color --logo=${{ matrix.logo }} > /tmp/forced.txt
-          diff <(sed 's/[0-9]//g' /tmp/dash.txt) <(sed 's/[0-9]//g' /tmp/forced.txt) \
-            > /dev/null \
+          # Assert the expected art is present, rather than comparing two whole runs.
+          # Comparing runs does not work: a value whose *length* changes between them
+          # (uptime rolling over, memory used gaining a digit) shifts that panel's
+          # padding, and stripping digits does not strip the spaces.
+          #
+          # The longest line of the logo is distinctive enough to identify it and is
+          # the least likely to collide between distros.
+          sig=""
+          while IFS= read -r art_line; do
+            if [ "${#art_line}" -gt "${#sig}" ]; then
+              sig="$art_line"
+            fi
+          done < "/usr/local/lib/distrofetch/logos/${{ matrix.logo }}.txt"
+          [ -n "$sig" ] || { echo "logo file for ${{ matrix.logo }} is empty" >&2; exit 1; }
+
+          grep -qF -- "$sig" /tmp/dash.txt \
             || { echo "auto-selected logo is not ${{ matrix.logo }}" >&2; exit 1; }
 
           # Every panel border must land in the same column or the grid shears.
@@ -126,11 +139,18 @@ jobs:
           COLUMNS=140 distrofetch --no-color \
             | sed -e 's/│/|/g' -e 's/┌/+/g' -e 's/┐/+/g' -e 's/└/+/g' \
                   -e 's/┘/+/g' -e 's/├/+/g' -e 's/┤/+/g' -e 's/─/-/g' \
-            | grep -F '|' \
-            | awk '{ if (n == 0) { n = length($0) }
-                     else if (length($0) != n) {
-                       print "ragged panel edge at line " NR ": " length($0) " vs " n
-                       exit 1 } }'
+            > /tmp/flat.txt
+          first=""
+          while IFS= read -r line; do
+            case "$line" in *'|'*) ;; *) continue ;; esac
+            # Safe now: everything left is ASCII, so ${#} is the display width.
+            if [ -z "$first" ]; then first="${#line}"; fi
+            if [ "${#line}" -ne "$first" ]; then
+              echo "ragged panel edge: ${#line} vs $first" >&2
+              exit 1
+            fi
+          done < /tmp/flat.txt
+          [ -n "$first" ] || { echo "no panel lines found" >&2; exit 1; }
 
           # --- memory modules -----------------------------------------------------
           # Unprivileged runs must explain themselves rather than printing "unknown",
