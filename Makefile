@@ -13,8 +13,9 @@ VERSION := $(shell sed -n 's/^DISTROFETCH_VERSION="\(.*\)"$$/\1/p' bin/distrofet
 BINDIR := $(DESTDIR)$(PREFIX)/bin
 LIBDIR := $(DESTDIR)$(PREFIX)/lib/distrofetch
 
-SCRIPTS := bin/distrofetch lib/detect.sh lib/render.sh lib/dmi.sh lib/hwdata.sh
-LIBS := lib/detect.sh lib/render.sh lib/dmi.sh lib/hwdata.sh
+SCRIPTS := bin/distrofetch lib/detect.sh lib/render.sh lib/dmi.sh lib/hwdata.sh lib/devices.sh \
+           tests/fixtures/make-sysfs-fixtures.sh
+LIBS := lib/detect.sh lib/render.sh lib/dmi.sh lib/hwdata.sh lib/devices.sh
 SHFMT_FLAGS := -i 2 -ci -bn
 
 .DEFAULT_GOAL := help
@@ -51,8 +52,9 @@ smoke: ## Run the real entry point against this machine
 	bin/distrofetch --no-color
 	bin/distrofetch --no-art --no-color
 
-fixtures: ## Regenerate the SMBIOS test fixtures
+fixtures: ## Regenerate the SMBIOS and sysfs test fixtures
 	python3 tests/fixtures/make-dmi-fixtures.py
+	bash tests/fixtures/make-sysfs-fixtures.sh
 
 version: ## Print the version bin/distrofetch reports
 	@echo $(VERSION)

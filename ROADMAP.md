@@ -61,6 +61,9 @@ firmware; no panel border out of column at any terminal width.
 - [x] SMBIOS type-17 parser for module size, type, speed, and manufacturer
 - [x] CPU generation, its launch year, and distance from the newest known generation
 - [x] Intel and AMD vendor marks in the processor panel, dropping out when narrow
+- [x] Graphics, network, USB, and Thunderbolt panels, from sysfs only
+- [x] Synthetic sysfs fixtures covering switchable graphics, a down link, an unbound
+      driver, a USB4 bus, and an unauthorised Thunderbolt device
 - [x] Column-alignment tests across seven terminal widths
 - [ ] **Verify the SMBIOS parser against real hardware.** It passes against synthetic
       fixtures covering both size units, the extended-size escape, empty slots, and
@@ -71,6 +74,10 @@ firmware; no panel border out of column at any terminal width.
       missing row silently under-reports every "N generations behind"
 - [ ] A `Data as of:` staleness warning when the tables are more than a year old
 - [ ] Decide whether `dmidecode` should be preferred when present *and* root
+- [ ] Verify the Thunderbolt panel against a machine with a device actually plugged in;
+      the attached-device path has only ever run against fixtures
+- [ ] Verify graphics against a discrete GPU and against switchable graphics; the
+      developer machine has integrated only and every CI runner is headless
 
 ---
 

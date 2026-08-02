@@ -44,6 +44,8 @@ readonly DISTROFETCH_VERSION
 . "$DISTROFETCH_LIB/dmi.sh"
 # shellcheck source=../lib/detect.sh
 . "$DISTROFETCH_LIB/detect.sh"
+# shellcheck source=../lib/devices.sh
+. "$DISTROFETCH_LIB/devices.sh"
 # shellcheck source=../lib/hwdata.sh
 . "$DISTROFETCH_LIB/hwdata.sh"
 # shellcheck source=../lib/render.sh

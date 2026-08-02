@@ -90,6 +90,37 @@ fresh install and wants the specs without installing a toolchain first.
 17. Never read the memory module serial number. It is a durable hardware identifier and
     this output is designed to be posted publicly.
 
+### Attached devices
+
+18. Report every display-class PCI device, distinguishing VGA, 3D, and display
+    controllers. A laptop with switchable graphics has two, and which one drives the
+    panel is the difference between them.
+19. Report every network interface backed by a hardware device, with its model, driver,
+    link state, and negotiated rate where one exists. Identify virtual interfaces by the
+    absence of a device link, never by a list of names — the list would need extending
+    for every new kind of virtual interface.
+20. **Never read a MAC address.** It is a durable, globally unique identifier for the
+    machine, and this output is designed to be posted.
+21. Report USB host controllers grouped by link speed, named from the speed rather than
+    the `version` attribute: USB 3.2 Gen 1, Gen 2, and Gen 2x2 all report version 3.10
+    and differ only in rate.
+22. State that root-hub port counts are per controller and not sockets on the chassis. A
+    single USB-C connector is wired to a 2.0 root hub and a 3.x one at once, so the
+    total is routinely double the number of holes in the case.
+23. Report Thunderbolt and USB4 domains with generation, security policy, and whether
+    IOMMU DMA protection is on; and list attached devices with their authorisation
+    state. Never report a Thunderbolt *port count* — the mapping from domain to physical
+    connector is board-specific and not exposed by the kernel, so any number would be a
+    guess dressed as a measurement.
+24. Spell out what a Thunderbolt security level means. `none` reads as "no security
+    feature present" when it actually means every device gets PCIe access on connect.
+25. Distinguish "no such hardware" from "hardware present but unidentifiable". A
+    container with no display adapter and a machine whose GPU could not be named are
+    different answers, and `unknown` cannot express the first.
+26. Resolve PCI vendor and device names from `pci.ids` where it is installed, and from a
+    bundled vendor table otherwise, degrading to `[vendor:device]` hex. The database is
+    absent from minimal containers, which is where the smoke matrix runs.
+
 ### The animation
 
 18. Animate falling glyphs before the dashboard, for a duration the user controls. The
@@ -177,13 +208,19 @@ be skipped without touching detection.
 | `bin/distrofetch` | Argument parsing, library path resolution, orchestration |
 | `lib/detect.sh` | Host probes. One line of stdout each, never exits, never writes |
 | `lib/dmi.sh` | DMI text fields, and the SMBIOS type-17 parser |
+| `lib/devices.sh` | Graphics, network, USB, and Thunderbolt enumeration |
 | `lib/hwdata.sh` | Lookups against the bundled reference tables |
 | `lib/render.sh` | Palette, glyph animation, panel engine, dashboard layout |
 | `lib/data/*.tsv` | Distribution release/support data; CPU microarchitecture table |
 | `lib/logos/*.txt` | One ASCII logo per distribution, plus a generic fallback |
 | `Makefile` | lint / fmt / test / dist / install — the same targets CI runs |
 | `tests/*.bats` | CLI contract, layout alignment, SMBIOS parsing, table lookups |
-| `tests/fixtures/` | Synthetic SMBIOS records and DMI id files |
+| `tests/fixtures/` | Synthetic SMBIOS records, DMI id files, and sysfs trees |
+
+`devices.sh` is separate from `detect.sh` because it breaks that module's contract
+deliberately: a probe in `detect.sh` answers one question with one line, while a function
+in `devices.sh` answers "what is attached" and prints one line per device **or nothing at
+all**. Nothing is the answer for a container with no GPU, and `unknown` cannot say it.
 
 The split between detection and rendering exists so the probes can be tested without a
 terminal. The split between detection and `hwdata.sh` is different in kind: detection
@@ -239,6 +276,11 @@ Reporting per-module memory detail widened the fingerprint, so two rules constra
   identifier, and this output exists to be screenshotted. The parser skips the offset
   entirely rather than reading and discarding it, so it cannot leak through a future
   change to the formatting.
+- **No stable hardware identifier is ever read.** The DIMM serial at SMBIOS offset
+  0x18, PCI serial numbers, and interface MAC addresses are all skipped rather than read
+  and discarded, so no future change to the formatting can leak one. Individually these
+  are mundane; together they are a fingerprint that survives a reinstall, and the output
+  exists to be screenshotted.
 - **Privilege is never requested.** The raw SMBIOS tables are mode 0400. distrofetch
   reports what an unprivileged process can see and names `sudo distrofetch` as the way
   to see more; it does not re-exec itself, prompt, or fail. A fetch tool that asks for
@@ -268,6 +310,7 @@ Changing anything in this table is a decision, and gets recorded in `docs/DECISI
 | `lib/data/distro-releases.tsv` | <https://endoflife.date> | Every release and EOL announcement |
 | `lib/data/cpu-arch.tsv` | Intel ARK, AMD product pages | Every new microarchitecture |
 | `lib/data/cpu-generations.tsv` | Intel ARK, AMD product pages | Every new generation |
+| `lib/data/pci-vendors.tsv` | <https://pci-ids.ucw.cz> | Rarely — PCI vendor IDs are permanent |
 
 `cpu-generations.tsv` defines "latest" by its own highest ordinal, so adding a
 generation is one line and every "N behind" recalculates. Nothing hardcodes the newest
@@ -301,8 +344,19 @@ on every push. <!-- assumed --> arm64 is expected to work but is not tested.
   different project with a different maintenance burden.
 - **A configuration file.** Flags only. If a fact is worth showing, it is worth showing
   by default.
-- **GPU, disk, theme, icon, or WM/DE detection.** Every one of these is a pile of
-  vendor-specific special cases, and they are where fetch tools go to become unmaintainable.
+- **Disk, theme, icon, and WM/DE detection.** *Superseded 2026-08-02 for GPU only —
+  graphics, network, USB, and Thunderbolt were previously non-goals under this heading.*
+  The reasoning stands for what remains: each is a pile of vendor-specific special cases.
+  What made graphics and the buses tractable is that everything reported about them comes
+  from sysfs with a fixed shape — a PCI class code, a link speed in Mbit/s, a generation
+  integer — and none of it needs a per-vendor branch. Anything requiring per-vendor code
+  to *read* is still out.
+- **VRAM, GPU clocks, temperatures, and utilisation.** These are where graphics
+  reporting turns into a per-driver project: amdgpu exposes them in sysfs, i915 does not,
+  and nvidia needs a proprietary tool. The adapter's identity needs none of that.
+- **IP addresses, routes, and DNS.** Network reporting here stops at the hardware. What
+  is configured on an interface is both larger in scope and more sensitive than what the
+  interface is.
 - **Non-Linux package managers**, Nix, and Homebrew. <!-- assumed -->
 - **Running as root or requiring elevated privilege** for any probe.
 
@@ -321,7 +375,16 @@ on every push. <!-- assumed --> arm64 is expected to work but is not tested.
       source tree resolves libraries, tables, and logos
 - [ ] The SMBIOS parser reads both size units, the 32-bit extended-size escape, an empty
       slot, and a record with no manufacturer, against synthetic fixtures
-- [ ] No memory module serial number appears in any output
+- [ ] No memory module serial number and no MAC address appears in any output
+- [ ] Switchable graphics report both adapters, labelled; a container with none reports
+      `none present` rather than `unknown`
+- [ ] A down ethernet link reports no rate rather than `-1`
+- [ ] USB buses group by speed class and the output states that root ports are not
+      sockets
+- [ ] Thunderbolt domains report generation, security policy, and DMA protection, and
+      no port count is claimed
+- [ ] Device names resolve from `pci.ids` where present and degrade to the bundled
+      vendor table and then to hex where it is not
 - [ ] An unprivileged run states why module detail is unavailable rather than printing
       `unknown`
 - [ ] A rolling release reports no end of life; an expired release reports its overrun;

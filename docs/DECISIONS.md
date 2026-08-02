@@ -8,6 +8,84 @@ decision, it is a preference.
 
 ---
 
+## 2026-08-02 — Graphics, network, USB, and Thunderbolt, reversing part of a non-goal
+
+**Status:** accepted — supersedes the GPU half of the "GPU, disk, theme, icon, or WM/DE
+detection" non-goal in SPEC.md
+
+**Context:** SPEC.md ruled these out together as "a pile of vendor-specific special
+cases, and where fetch tools go to become unmaintainable". The maintainer asked for
+graphics, network cards, and USB ports with bandwidth including Thunderbolt detection.
+
+**Decision:** Add them, in a new `lib/devices.sh`. Keep disk, theme, icon, and WM/DE out,
+and add VRAM, GPU clocks, temperatures, utilisation, IP addresses, routes, and DNS as new
+non-goals.
+
+**Alternatives:** Refusing on the original grounds — the maintainer had read that
+reasoning and asked anyway, so it is their call. Shelling out to `lspci`, `ip`, `lsusb`,
+and `boltctl` — rejected: four runtime dependencies for facts that are all in sysfs, and
+"no runtime dependencies" is a promise in the README.
+
+**Consequences:** The original reasoning was right about *why* these are dangerous, and
+what makes this subset safe is worth stating: everything reported here has a fixed shape
+in sysfs — a PCI class code, a link rate in Mbit/s, a generation integer — and needs no
+per-vendor branch to read. That is the line. VRAM is the counter-example and is now an
+explicit non-goal: amdgpu exposes it in sysfs, i915 does not, and nvidia needs a
+proprietary tool, so one field would mean three code paths and a maintenance burden per
+driver. **Anything requiring per-vendor code to read stays out.**
+
+The dashboard is now ~50 lines at full width. That is long for a terminal, and is the
+cost of the request.
+
+---
+
+## 2026-08-02 — No port counts, for USB or Thunderbolt
+
+**Status:** accepted
+
+**Context:** The request was for "usbs ports with bandwidth incl. thunderbolt ready
+ports". The obvious reading is a count of ports. The kernel does not expose one.
+
+**Decision:** Report USB *controllers* grouped by link speed, with their root-hub port
+totals labelled as per controller, and state in the panel that these are not sockets.
+Report Thunderbolt *domains* with generation and security policy, and no port number at
+all.
+
+**Alternatives:** Summing `maxchild` across root hubs and calling it a port count —
+rejected: a single USB-C socket is wired to a USB 2.0 root hub and a 3.x one
+simultaneously, so the sum is routinely double the sockets on the chassis. This machine
+reports 20 root ports across four buses and has four physical connectors. Inferring
+Thunderbolt ports from domain count — rejected: the domain-to-connector mapping is
+board-specific and not exposed, so it would be a guess presented as a measurement.
+
+**Consequences:** The answer is less satisfying than a number would be, and the panel
+spends a clause explaining itself. That is the correct trade for a tool whose value is
+that its output can be trusted: a wrong port count is the kind of error someone repeats
+in a forum post.
+
+---
+
+## 2026-08-02 — MAC addresses are never read
+
+**Status:** accepted — extends the DIMM serial rule
+
+**Context:** Network interface enumeration puts `/sys/class/net/*/address` one directory
+away from every other field being read.
+
+**Decision:** Never read it. The parser does not read-and-discard; the path is never
+opened.
+
+**Alternatives:** Reading and masking it — rejected for the same reason as the DIMM
+serial: a future change to the formatting could unmask it, and there is no reason to
+have the value in a variable at all.
+
+**Consequences:** distrofetch cannot report an interface's hardware address, which is
+occasionally what someone wants. It is one `cat` away and not this tool's job. The
+fixtures carry a MAC so a test can prove it never surfaces, and the smoke workflow
+checks every real interface on all three runners.
+
+---
+
 ## 2026-08-02 — Generation currency, with the comparison basis named
 
 **Status:** accepted
