@@ -71,3 +71,20 @@ jobs:
           # detect_packages must pick the right backend for this distro.
           grep -q '(${{ matrix.pkgmgr }})' /tmp/report.txt \
             || { echo "expected ${{ matrix.pkgmgr }} package backend" >&2; exit 1; }
+
+          # --no-art is what anything parsing this output is told to use, so no part of
+          # the frame may survive it, and it must stay one line per field plus the
+          # two-line header. The default report is checked above; this checks the escape
+          # hatch still works on a distro where tput may not even be installed.
+          # grep -F, not a bracket expression: containers run in the C locale, where a
+          # bracket expression matches bytes, and the header rule U+2500 shares its
+          # first two bytes with the frame's U+2502. Fixed strings compare whole
+          # sequences and tell the two apart.
+          distrofetch --no-art --no-color > /tmp/plain.txt
+          if grep -qF -e '│' -e '┌' -e '┐' -e '└' -e '┘' -e '├' -e '┤' -e '█' /tmp/plain.txt; then
+            echo "--no-art emitted banner or frame characters:" >&2
+            cat /tmp/plain.txt >&2
+            exit 1
+          fi
+          lines=$(wc -l < /tmp/plain.txt)
+          [ "$lines" -eq 10 ] || { echo "expected 10 plain lines, got $lines" >&2; exit 1; }

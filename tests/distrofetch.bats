@@ -9,6 +9,16 @@ setup() {
   . "$BATS_TEST_DIRNAME/../lib/detect.sh"
 }
 
+# ${#str} counts characters in a UTF-8 locale and bytes otherwise. distrofetch itself
+# copes either way — it measures ASCII values and uses a constant for the multibyte
+# banner — but the column-alignment tests below cannot measure anything without it.
+require_utf8() {
+  local box='│'
+  if [ "${#box}" -ne 1 ]; then
+    skip "needs a UTF-8 locale to measure column widths (LANG=${LANG:-unset})"
+  fi
+}
+
 @test "--version prints a semver-looking string" {
   run "$DF" --version
   [ "$status" -eq 0 ]
@@ -18,7 +28,7 @@ setup() {
 @test "--help mentions every documented flag" {
   run "$DF" --help
   [ "$status" -eq 0 ]
-  for flag in --no-rain --no-color --duration --version --help; do
+  for flag in --no-rain --no-art --no-color --duration --version --help; do
     [[ "$output" == *"$flag"* ]]
   done
 }
@@ -120,6 +130,83 @@ setup() {
   run "$DF" --no-color
   [ "$status" -eq 0 ]
   [[ "$output" != *$'\033'* ]]
+}
+
+# --- banner and box -------------------------------------------------------
+
+@test "the default report is framed and carries the banner" {
+  run "$DF" --no-color
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"┌"* ]]
+  [[ "$output" == *"└"* ]]
+  [[ "$output" == *"█"* ]]
+}
+
+@test "--no-art drops the frame and the banner but keeps every field" {
+  run "$DF" --no-art --no-color
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"┌"* ]]
+  [[ "$output" != *"█"* ]]
+  for label in OS: Kernel: Arch: Uptime: Packages: Shell: CPU: Memory:; do
+    [[ "$output" == *"$label"* ]]
+  done
+}
+
+@test "--no-art emits no escapes when color is off" {
+  run "$DF" --no-art --no-color
+  [ "$status" -eq 0 ]
+  [[ "$output" != *$'\033'* ]]
+}
+
+# The box is 58 columns wide here. Drawing it in a 40-column terminal would wrap every
+# line; the plain report is the better failure mode.
+@test "the frame drops out on a terminal too narrow to hold it" {
+  COLUMNS=40 run "$DF" --no-color
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"┌"* ]]
+  [[ "$output" == *"OS:"* ]]
+}
+
+@test "a wide terminal keeps the frame" {
+  COLUMNS=200 run "$DF" --no-color
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"┌"* ]]
+}
+
+# Every boxed line has to end at the same column, or the right edge visibly zigzags.
+@test "the frame's right edge is flush on every line" {
+  require_utf8
+  COLUMNS=200 run "$DF" --no-color
+  [ "$status" -eq 0 ]
+  local width=""
+  for line in "${lines[@]}"; do
+    [[ "$line" == *"│"* || "$line" == *"┌"* || "$line" == *"├"* || "$line" == *"└"* ]] || continue
+    if [ -z "$width" ]; then
+      width="${#line}"
+    fi
+    [ "${#line}" -eq "$width" ]
+  done
+  [ -n "$width" ]
+}
+
+# A value wider than the banner has to push the box out rather than overflow it.
+@test "a long value widens the frame instead of breaking it" {
+  require_utf8
+  run env COLUMNS=200 USER="$(printf 'u%.0s' {1..90})" "$DF" --no-color
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"┌"* ]]
+  local width=""
+  for line in "${lines[@]}"; do
+    [[ "$line" == *"│"* || "$line" == *"┌"* ]] || continue
+    if [ -z "$width" ]; then width="${#line}"; fi
+    [ "${#line}" -eq "$width" ]
+  done
+  [ "$width" -gt 58 ]
+}
+
+@test "an unknown --no-art-like typo is still rejected" {
+  run "$DF" --no-arts
+  [ "$status" -eq 2 ]
 }
 
 @test "detection probes each return exactly one non-empty line" {

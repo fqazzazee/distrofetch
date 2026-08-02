@@ -32,44 +32,71 @@ fresh install and wants the specs without installing a toolchain first.
    animation is opt-in: the default duration is `0`, which skips it entirely. A duration
    of `0` must bypass the animation code rather than run it for zero seconds, since it
    clears the screen on exit.
-4. Detect that stdout is not a terminal and disable the animation, the cursor control,
+4. Render the rain as columns, not scatter: each column is one stream with its own
+   position, speed, and trail length, a white leading glyph, and a tail that fades
+   through the green ramp before being erased. Scattered characters are not the effect.
+5. Run the animation on the alternate screen buffer and return to the normal buffer
+   before printing the report, so nothing the user had on screen is destroyed.
+6. Print a wordmark banner and a box frame around the report by default. `--no-art`
+   suppresses both, and they are suppressed automatically when the terminal is narrower
+   than the frame — wrapping every line is worse than not drawing it.
+7. Resolve the report's values out of random glyphs when the animation ran, redrawing
+   the field block in place. This is the settle, and it only happens on the path that
+   already required a terminal.
+8. Fall back to an ASCII glyph set outside a UTF-8 locale. `${var:i:1}` slices bytes
+   rather than characters there, which turns half-width katakana into mojibake.
+9. Detect that stdout is not a terminal and disable the animation, the cursor control,
    **and color** automatically, so piped and redirected output contains no escape
    sequences. Skipping only the animation is not enough — color alone still writes
    escapes into the file.
-5. Resolve color from `--color=WHEN`, where `WHEN` is `always`, `never`, or `auto`, and
-   `auto` is the automatic behavior in 4. `--no-color` is an alias for `never`. Reject any
-   other value with a usage error that names the three valid ones.
-6. Gate the animation on a real terminal independently of color. `--color=always` forces
-   escapes into a pipe by request; it must never force cursor positioning or a screen
-   clear into one.
-7. Exit `0` on success and `2` on a usage error, writing usage errors to stderr.
-8. Select the package-count backend from what is present on the system: pacman, then
-   dpkg, then rpm.
-9. Restore the cursor and reset the terminal if interrupted mid-animation.
-10. Run from a source checkout and from an installed prefix without configuration.
+10. Resolve color from `--color=WHEN`, where `WHEN` is `always`, `never`, or `auto`, and
+    `auto` is the automatic behavior in 9. `--no-color` is an alias for `never`. Reject
+    any other value with a usage error that names the three valid ones.
+11. Gate the animation on a real terminal independently of color. `--color=always` forces
+    escapes into a pipe by request; it must never force cursor positioning or a screen
+    clear into one.
+12. Exit `0` on success and `2` on a usage error, writing usage errors to stderr.
+13. Select the package-count backend from what is present on the system: pacman, then
+    dpkg, then rpm.
+14. Restore the cursor, leave the alternate screen, and reset the palette if interrupted
+    mid-animation.
+15. Run from a source checkout and from an installed prefix without configuration.
 
 ## UX
 
 ```
-distrofetch [-d|--duration N] [-n|--no-rain] [--color=WHEN] [-c|--no-color]
-            [-v|--version] [-h|--help]
+distrofetch [-d|--duration N] [-n|--no-rain] [--no-art] [--color=WHEN]
+            [-c|--no-color] [-v|--version] [-h|--help]
 ```
 
-Bare `distrofetch` prints the report and nothing else. `distrofetch -d 2` is the full
-effect.
+Bare `distrofetch` prints the framed report immediately. `distrofetch -d 2` is the full
+effect: rain, then the report assembling out of it.
 
-Report format — a two-line header, then one aligned `Label: value` per fact:
+Report format — the wordmark, the host line, then one aligned `Label: value` per fact,
+all inside a frame sized to the widest line:
 
 ```
-user@host
-────────────────────────────────
-OS:        Fedora Linux 44 (Workstation Edition)
-Kernel:    Linux 7.1.5-201.fc44.x86_64
-...
+┌────────────────────────────────────────────────────────┐
+│ ███  ████ ████ ████ ███  ████ ████ ████ ████ ████ █  █ │
+│ █  █  ██  █     ██  █  █ █  █ █    █     ██  █    █  █ │
+│ █  █  ██  ████  ██  ███  █  █ ███  ███   ██  █    ████ │
+│ █  █  ██     █  ██  █ █  █  █ █    █     ██  █    █  █ │
+│ ███  ████ ████  ██  █  █ ████ █    ████  ██  ████ █  █ │
+│ user@host                                              │
+├────────────────────────────────────────────────────────┤
+│ OS:        Fedora Linux 44 (Workstation Edition)       │
+│ Kernel:    Linux 7.1.5-201.fc44.x86_64                 │
+└────────────────────────────────────────────────────────┘
 ```
 
-Labels render in green, values in bright green, the rule in dim green. With `--no-color`
-the same layout renders with no escape sequences at all.
+Labels render in green, values in bright green, the frame in dim green, and the banner
+runs top to bottom through the same five-step ramp the rain fades through. `--no-art`
+gives the bare `Label: value` lines with no frame — the shape anything parsing this
+wants. With `--no-color` either layout renders with no escape sequences at all.
+
+The frame is drawn only when the terminal can hold it. Width comes from `COLUMNS` when
+that is set and numeric, then `tput cols`, then 80 — the same precedence `less` uses,
+and the reason the narrow-terminal fallback is testable without allocating a pty.
 
 ## Architecture
 
@@ -83,9 +110,10 @@ be skipped without touching detection.
 |---|---|
 | `bin/distrofetch` | Argument parsing, library path resolution, orchestration |
 | `lib/detect.sh` | Host probes. One line of stdout each, never exits, never writes |
-| `lib/render.sh` | Palette, glyph animation, report layout |
+| `lib/render.sh` | Palette, glyph animation, banner, frame, report layout |
+| `scripts/banner.sh` | Regenerates the five banner rows from a per-letter table |
 | `Makefile` | lint / fmt / test / dist / install — the same targets CI runs |
-| `tests/distrofetch.bats` | CLI contract plus probe shape assertions |
+| `tests/distrofetch.bats` | CLI contract, layout alignment, probe shape assertions |
 
 ### Data flow
 
@@ -139,8 +167,10 @@ on every push. <!-- assumed --> arm64 is expected to work but is not tested.
 
 - **macOS and BSD.** The probes read `/proc`. Supporting Darwin means a second detection
   implementation against `sysctl` and IOKit, not a compatibility shim.
-- **ASCII distro logos.** The glyph rain is the visual identity. Logos are what makes
-  neofetch large.
+- **Per-distro ASCII logos.** Hundreds of hand-maintained logos, one per distro, plus the
+  detection to pick between them, is what makes neofetch large. The single `DISTROFETCH`
+  wordmark is not that: it is five constant rows, generated by `scripts/banner.sh`, and
+  it does not grow when a new distro ships.
 - **A configuration file.** Flags only. If a fact is worth showing, it is worth showing
   by default.
 - **Images in the terminal.** No sixel, no kitty graphics protocol, no w3m.
@@ -159,6 +189,12 @@ on every push. <!-- assumed --> arm64 is expected to work but is not tested.
       source tree works
 - [ ] Ctrl-C during the animation restores the cursor and leaves the terminal usable
 - [ ] Bare `distrofetch` prints the report with no animation and no screen clear
+- [ ] Every line of the frame ends at the same column, including the banner rows and a
+      value wider than the wordmark
+- [ ] `COLUMNS=40 distrofetch` falls back to the unframed report rather than wrapping
+- [ ] A 2-second rain in a 200-column terminal stays well under one core
+- [ ] `LC_ALL=C distrofetch -d 2` rains ASCII rather than mojibake
+- [ ] The rain leaves the terminal's previous contents intact
 - [ ] `make dist` produces a tarball plus a checksum that `sha256sum -c` verifies
 - [ ] Total script size stays under 500 lines across `bin/` and `lib/`
 
