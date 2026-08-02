@@ -77,6 +77,10 @@ the same make target you just ran.
 - `cmd | grep -m1 ...` fails under `set -o pipefail`. grep exits at the first match, the
   writer takes SIGPIPE, and the pipeline reports failure on success. Use a single tool
   that stops on its own, such as `sed ... {p;q}`.
+- **git cannot store an empty directory.** A fixture tree that relies on one works
+  locally and arrives broken in CI: the symlinks survive, the directories they point at
+  do not. Every fixture directory needs a file in it, and nothing may depend on a
+  symlink target existing.
 - `readlink -f` prints a path whose last component does not exist. Test `-L` before
   resolving a sysfs `driver` symlink, or an unbound device reports its driver as the
   literal string `driver`.

@@ -31,7 +31,8 @@ mkpci() {
   printf '%s\n' "$vendor" >"$pci/$slot/vendor"
   printf '%s\n' "$device" >"$pci/$slot/device"
   if [ -n "$driver" ]; then
-    mkdir -p "$pci/drivers/$driver"
+    # Only the symlink, not the directory it names. git cannot store an empty
+    # directory, so anything that has to survive a checkout must be a file or a link.
     ln -sfn "../drivers/$driver" "$pci/$slot/driver"
   fi
 }
@@ -61,9 +62,14 @@ mkiface() {
   printf '%s\n' "$device" >"$net/$name/device/device"
   # Never read, and present so a test can prove it stays unread.
   printf '%s\n' 'de:ad:be:ef:00:01' >"$net/$name/address"
-  mkdir -p "$net/drivers/$driver"
   ln -sfn "../../drivers/$driver" "$net/$name/device/driver"
-  [ "$wifi" = wifi ] && mkdir -p "$net/$name/wireless"
+  # A file inside, not just the directory: an empty `wireless/` would not survive a
+  # git checkout and every wireless interface would come back as ethernet.
+  if [ "$wifi" = wifi ]; then
+    mkdir -p "$net/$name/wireless"
+    printf '0000   0   0   0    0     0      0      0      0        0\n' \
+      >"$net/$name/wireless/status"
+  fi
   return 0
 }
 

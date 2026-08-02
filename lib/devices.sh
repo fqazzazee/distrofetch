@@ -39,13 +39,21 @@ _dev_read() {
 # The driver bound to a device, from the symlink sysfs leaves at device/driver.
 _dev_driver() {
   local link
-  # The -L test is load-bearing. `readlink -f` on a path whose final component does not
-  # exist still prints that path, so an unbound device — a discrete GPU with no driver
-  # loaded, which is exactly the interesting case — reported its driver as the literal
-  # string "driver".
+  # Two deliberate choices here.
+  #
+  # The -L test, because `readlink -f` on a path whose final component does not exist
+  # still prints that path — so an unbound device, which is exactly the interesting
+  # case, reported its driver as the literal string "driver".
+  #
+  # Plain `readlink` rather than `readlink -f`, because the link text already ends in
+  # the driver name and resolving it requires the target to exist. That is true in real
+  # sysfs and false in a fixture tree: git cannot store an empty directory, so a
+  # checked-out fixture has the symlink but not the directory it points at, and -f
+  # silently yields nothing.
   [ -L "$1/driver" ] || return 0
-  link="$(readlink -f "$1/driver" 2>/dev/null)" || return 0
+  link="$(readlink "$1/driver" 2>/dev/null)" || return 0
   [ -n "$link" ] || return 0
+  link="${link%/}"
   printf '%s' "${link##*/}"
 }
 
