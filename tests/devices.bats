@@ -15,7 +15,8 @@ setup() {
   DF_SYS_USB="$ROOT/usb"
   DF_SYS_TBT="$ROOT/thunderbolt"
   DF_SYS_BLOCK="$ROOT/block"
-  export DF_SYS_PCI DF_SYS_NET DF_SYS_USB DF_SYS_TBT DF_SYS_BLOCK
+  DF_SYS_EDAC="$ROOT/edac"
+  export DF_SYS_PCI DF_SYS_NET DF_SYS_USB DF_SYS_TBT DF_SYS_BLOCK DF_SYS_EDAC
   # shellcheck source=../lib/devices.sh
   . "$BATS_TEST_DIRNAME/../lib/devices.sh"
 }
@@ -50,13 +51,23 @@ setup() {
 
 # --- network ---------------------------------------------------------------
 
-@test "only interfaces backed by hardware are enumerated" {
+# Every interface is enumerated now, virtual ones included and classified. Filtering
+# them out cannot answer "why is my ethernet missing", which is the question this panel
+# exists to answer.
+@test "every interface is enumerated, virtual ones classified by kind" {
   run detect_nics
   [ "$status" -eq 0 ]
-  [ "${#lines[@]}" -eq 3 ]
-  for virtual in lo docker0 br-df56d9872e83 tailscale0 veth0; do
-    [[ "$output" != *"$virtual"* ]]
-  done
+  [ "${#lines[@]}" -eq 8 ]
+  [[ "$output" == *'lo|loopback|'* ]]
+  [[ "$output" == *'docker0|bridge|'* ]]
+  [[ "$output" == *'veth0|veth|'* ]]
+  [[ "$output" == *'eth0|ethernet|'* ]]
+}
+
+@test "hardware interfaces carry their vendor and driver, virtual ones do not" {
+  run detect_nics
+  [[ "$output" == *'eth0|ethernet|8086|15fb|e1000e|'* ]]
+  [[ "$output" == *'docker0|bridge||||'* ]]
 }
 
 @test "wireless interfaces are distinguished from ethernet" {
@@ -69,14 +80,13 @@ setup() {
 # would be worse than printing nothing.
 @test "a down link reports no speed rather than -1" {
   run detect_nics
-  [[ "${lines[0]}" == 'eth0|ethernet|8086|15fb|e1000e|up|1000' ]]
-  [[ "${lines[1]}" == 'eth1|ethernet|14e4|1657|tg3|down|' ]]
+  [[ "$output" == *'eth0|ethernet|8086|15fb|e1000e|up|1000|'* ]]
+  [[ "$output" == *'eth1|ethernet|14e4|1657|tg3|down||'* ]]
 }
 
 @test "wireless reports no speed, since there is no single negotiated rate" {
   run detect_nics
-  [[ "${lines[2]}" == *'|wlan0'* || "${lines[2]}" == 'wlan0|'* ]]
-  [[ "${lines[2]}" == *'|up|' ]]
+  [[ "$output" == *'wlan0|wifi|8086|51f1|iwlwifi|up||'* ]]
 }
 
 # The MAC address is a durable, globally unique identifier for the machine, and this
@@ -166,14 +176,14 @@ setup() {
 
 @test "an NVMe drive reports its PCIe link" {
   run detect_disks
-  [[ "${lines[0]}" == *'|PCIe 4.0 x4' ]]
+  [[ "${lines[0]}" == *'|PCIe Gen 4 x4 (4 lanes)' ]]
 }
 
 # A Gen4 drive in a Gen3 slot runs at half speed and nothing else on the system says
 # so, which is the whole reason both numbers are reported.
 @test "a link running below its maximum reports both" {
   run detect_disks
-  [[ "${lines[1]}" == *'|PCIe 3.0 x2 (max 4.0 x4)' ]]
+  [[ "${lines[1]}" == *'|PCIe Gen 3 x2 (2 lanes), capable of Gen 4 x4' ]]
 }
 
 @test "a SATA disk has no PCIe link to report" {
@@ -269,6 +279,23 @@ setup() {
   [ "$output" = '5 Gbps' ]
 }
 
+# --- memory topology -------------------------------------------------------
+
+# EDAC is the only unprivileged source for this: SMBIOS carries the same topology at
+# mode 0400. Channels are counted per controller, because channel 0 of one controller
+# is not channel 0 of another.
+@test "memory channels are counted from EDAC" {
+  run detect_memory_channels
+  [ "$status" -eq 0 ]
+  [ "$output" = '4|2|8' ]
+}
+
+@test "a machine with no EDAC reports nothing rather than zero" {
+  DF_SYS_EDAC=/nonexistent run detect_memory_channels
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
 # --- Thunderbolt -----------------------------------------------------------
 
 @test "each domain is reported with the generation from its host router" {
@@ -325,6 +352,10 @@ setup() {
   [ -z "$output" ]
 
   DF_SYS_NET="$empty" run detect_nics
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+
+  DF_SYS_EDAC="$empty" run detect_memory_channels
   [ "$status" -eq 0 ]
   [ -z "$output" ]
 

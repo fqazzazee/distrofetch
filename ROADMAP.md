@@ -65,6 +65,11 @@ firmware; no panel border out of column at any terminal width.
 - [x] Storage panel with NVMe PCIe generation and width, negotiated against maximum
 - [x] Wi-Fi generation and ethernet rated speed from device names
 - [x] Clear screen and fit the dashboard to the terminal by dropping detail
+- [x] Wrap rather than truncate; size panels to their content
+- [x] Memory channel count from EDAC
+- [x] Every network interface listed, disconnected and virtual included
+- [x] Role-based colour palette with a hue per panel, and a matrix theme
+- [x] Progress output while probing
 - [x] Synthetic sysfs fixtures covering switchable graphics, a down link, an unbound
       driver, a USB4 bus, and an unauthorised Thunderbolt device
 - [x] Column-alignment tests across seven terminal widths
@@ -85,6 +90,8 @@ firmware; no panel border out of column at any terminal width.
       developer machine is CNVi, which is the case that deliberately reports nothing
 - [ ] Decide whether to add an image or HTML output target, which is the only way to
       get real type-size control for a screenshot
+- [ ] `--fit` bottoms out around 35 lines now that panels wrap instead of clipping.
+      Worth a three-column layout, or is that the floor?
 
 ---
 

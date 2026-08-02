@@ -180,7 +180,9 @@ require_utf8() {
 }
 
 @test "a wide terminal lays the panels out in two columns" {
-  COLUMNS=160 LINES=60 run "$DF" --no-color
+  # Pairing now happens only when the window can hold two panels at their full content
+  # width, so the threshold is much wider than it was when panels were simply halved.
+  COLUMNS=280 LINES=80 run "$DF" --no-color --no-clear
   [ "$status" -eq 0 ]
   # SYSTEM and DISTRIBUTION share a line only in the two-column layout.
   [[ "$output" == *"SYSTEM"*"DISTRIBUTION"* ]]
@@ -313,22 +315,23 @@ require_utf8() {
 }
 
 @test "the vendor logo appears in the processor panel on a wide terminal" {
-  COLUMNS=140 LINES=60 run "$DF" --no-color
+  COLUMNS=140 LINES=60 run "$DF" --no-color --no-clear
   [ "$status" -eq 0 ]
   # One of the three bundled marks has to be there.
   [[ "$output" == *"|_|_| |_|"* || "$output" == *"/_/ \\_\\_|"* || "$output" == *"|CPU|"* ]]
 }
 
-# The logo costs 22 columns inside the panel. Below the threshold every value clips to
-# make room for it, and a legible fact beats a legible logo.
-@test "the vendor logo drops out before the values start clipping" {
-  COLUMNS=64 LINES=60 run "$DF" --no-color
+# The mark goes when keeping it would leave the value column too narrow to read,
+# measured against the art actually loaded rather than a constant. Nothing is clipped
+# to make room for it either way.
+@test "the vendor logo drops out on a terminal too narrow to hold both" {
+  COLUMNS=58 LINES=60 run "$DF" --no-color --no-clear
   [ "$status" -eq 0 ]
-  [[ "$output" == *"PROCESSOR"* ]]
   [[ "$output" != *"|CPU|"* ]]
   [[ "$output" != *"|_|_| |_|"* ]]
-  # The panel still carries its facts.
+  # The panel still carries its facts, wrapped rather than cut.
   [[ "$output" == *"Micro-arch"* ]]
+  [[ "$output" != *"..."* ]]
 }
 
 @test "--no-logo removes the vendor logo as well as the distro one" {
@@ -385,13 +388,24 @@ fixture_env() {
   [[ "$output" == *"NVIDIA"* ]]
 }
 
-@test "physical interfaces are shown and virtual ones are not" {
-  COLUMNS=140 LINES=80 run env $(fixture_env) "$DF" --no-color
+# Virtual interfaces are listed too, on one muted row. Filtering them out cannot
+# answer "why is my interface missing", which is what someone opens this panel to find.
+@test "physical interfaces are detailed and virtual ones are listed" {
+  COLUMNS=140 LINES=80 run env $(fixture_env) "$DF" --no-color --no-clear
   [ "$status" -eq 0 ]
   [[ "$output" == *"eth0"* ]]
   [[ "$output" == *"wlan0"* ]]
-  [[ "$output" != *"docker0"* ]]
-  [[ "$output" != *"tailscale0"* ]]
+  [[ "$output" == *"Virtual"* ]]
+  [[ "$output" == *"docker0 (bridge"* ]]
+  [[ "$output" == *"lo (loopback"* ]]
+}
+
+# A port with nothing plugged into it is the case the panel was reported missing for.
+@test "a disconnected interface is shown and says why it is down" {
+  COLUMNS=140 LINES=80 run env $(fixture_env) "$DF" --no-color --no-clear
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"eth1"* ]]
+  [[ "$output" == *"down"* ]]
 }
 
 @test "a down link is shown as down with no speed attached to it" {
@@ -472,12 +486,12 @@ fixture_env() {
   [[ "$output" == *"nvme0n1"* ]]
   [[ "$output" == *"1.0 TB"* ]]
   [[ "$output" == *"NVMe"* ]]
-  [[ "$output" == *"PCIe 4.0 x4"* ]]
+  [[ "$output" == *"PCIe Gen 4 x4 (4 lanes)"* ]]
 }
 
 @test "a drive negotiated below its maximum shows both figures" {
   COLUMNS=140 LINES=80 run env $(fixture_env) "$DF" --no-color --no-clear
-  [[ "$output" == *"PCIe 3.0 x2 (max 4.0 x4)"* ]]
+  [[ "$output" == *"PCIe Gen 3 x2 (2 lanes), capable of Gen 4 x4"* ]]
 }
 
 @test "spinning disks and SSDs are distinguished" {
@@ -517,29 +531,58 @@ fixture_env() {
 # The point of the density system: the dashboard is meant to be one screenshot, so it
 # gives up detail rather than scrolling.
 
-@test "the dashboard fits the terminal height at a range of sizes" {
+@test "--fit makes the dashboard fit the terminal height" {
   local h n
-  for h in 60 45 36 30; do
-    COLUMNS=150 LINES=$h run "$DF" --no-color --no-clear
+  for h in 60 50 45; do
+    COLUMNS=150 LINES=$h run "$DF" --no-color --no-clear --fit
     [ "$status" -eq 0 ]
     n="${#lines[@]}"
     [ "$n" -le $((h - 1)) ]
   done
 }
 
-@test "a tall terminal keeps the detail a short one drops" {
-  COLUMNS=150 LINES=60 run "$DF" --no-color --no-clear
+# --fit trades detail for height, but it will not truncate a value to get there —
+# wrapping makes a condensed panel taller than a clipped one, so below roughly 35 lines
+# nine panels simply do not fit. It gets as close as it can and stops.
+@test "--fit shrinks as far as it can and does not truncate to go further" {
+  COLUMNS=150 LINES=60 run "$DF" --no-color --no-clear --fit
   local tall="${#lines[@]}"
+
+  COLUMNS=150 LINES=24 run "$DF" --no-color --no-clear --fit
+  [ "${#lines[@]}" -lt "$tall" ]
+  [[ "$output" != *"..."* ]]
+}
+
+# Without --fit nothing is dropped: scrolling costs the reader nothing and a dropped
+# row costs them the fact. This is the reverse of the earlier default, deliberately.
+@test "without --fit the dashboard keeps everything and lets the terminal scroll" {
+  COLUMNS=150 LINES=20 run "$DF" --no-color --no-clear
+  [ "$status" -eq 0 ]
+  [ "${#lines[@]}" -gt 19 ]
   [[ "$output" == *"Signature"* ]]
   [[ "$output" == *"Cache"* ]]
+}
 
-  COLUMNS=150 LINES=30 run "$DF" --no-color --no-clear
+# Asserted as a relationship rather than against specific rows: which row is the first
+# to go depends on how much the machine has to say, and a CI runner says less than a
+# laptop. What must hold everywhere is that less height means less output, and that what
+# survives still identifies the machine.
+@test "--fit keeps identity while dropping the rows that restate something" {
+  COLUMNS=150 LINES=80 run "$DF" --no-color --no-clear --fit
+  local tall="${#lines[@]}"
+
+  COLUMNS=150 LINES=24 run "$DF" --no-color --no-clear --fit
   [ "${#lines[@]}" -lt "$tall" ]
-  [[ "$output" != *"Signature"* ]]
-  # The facts that identify the machine survive every density.
-  [[ "$output" == *"OS"* ]]
-  [[ "$output" == *"Model"* ]]
-  [[ "$output" == *"STORAGE"* ]]
+  for kept in OS Kernel Model STORAGE MEMORY; do
+    [[ "$output" == *"$kept"* ]]
+  done
+}
+
+# The PCIe link is why anyone reads the storage panel, so it survives every density.
+@test "--fit never drops the PCIe link from a disk" {
+  COLUMNS=150 LINES=26 run env $(fixture_env) "$DF" --no-color --no-clear --fit
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"PCIe Gen"* ]]
 }
 
 # Panels whose one row says "none present" cost three lines to say nothing. At the
@@ -548,34 +591,10 @@ fixture_env() {
   local empty="$BATS_TEST_TMPDIR/none"
   mkdir -p "$empty"
   COLUMNS=150 LINES=18 DF_SYS_PCI="$empty" DF_SYS_NET="$empty" DF_SYS_USB="$empty" \
-    DF_SYS_TBT="$empty" DF_SYS_BLOCK="$empty" run "$DF" --no-color --no-clear
+    DF_SYS_TBT="$empty" DF_SYS_BLOCK="$empty" run "$DF" --no-color --no-clear --fit
   [ "$status" -eq 0 ]
   [[ "$output" != *"none present"* ]]
   [[ "$output" != *"no host controllers"* ]]
-}
-
-# The dense layout pairs panels two across, and dropping an empty one shifts every
-# later panel to the other column. A panel built at full width in a half-width slot
-# overruns the frame, so alignment has to hold there too.
-@test "every panel line ends at the same column in the dense layout" {
-  require_utf8
-  local edge first line plain h
-  for h in 30 26; do
-    COLUMNS=150 LINES=$h run "$DF" --no-color --no-clear
-    [ "$status" -eq 0 ]
-    first=""
-    for line in "${lines[@]}"; do
-      plain="${line%"${line##*[![:space:]]}"}"
-      case "$plain" in
-        *│ | *┐ | *┘) ;;
-        *) continue ;;
-      esac
-      edge="${#plain}"
-      if [ -z "$first" ]; then first="$edge"; fi
-      [ "$edge" -eq "$first" ]
-    done
-    [ -n "$first" ]
-  done
 }
 
 @test "the screen is cleared only on a terminal" {
