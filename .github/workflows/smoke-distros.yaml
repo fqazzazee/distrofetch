@@ -170,6 +170,34 @@ jobs:
             exit 1
           fi
 
+          # --- devices ------------------------------------------------------------
+          # Values are not asserted: a runner is a VM with no display adapter, one
+          # virtio NIC, and no Thunderbolt. What must hold is that each panel renders
+          # and reaches a definite answer — "none present" is a fact, a blank row is a
+          # bug, and "unknown" would be neither.
+          for section in GRAPHICS NETWORK PERIPHERALS; do
+            grep -q "$section" /tmp/dash.txt \
+              || { echo "missing panel: $section" >&2; exit 1; }
+          done
+
+          for row in 'GPU' 'USB' 'Thunderbolt'; do
+            grep -q "$row" /tmp/dash.txt \
+              || { echo "device panel missing row: $row" >&2; exit 1; }
+          done
+
+          # A MAC address is a durable unique identifier for the machine and this
+          # output is designed to be posted. Check the real interfaces on this runner,
+          # not a fixture: the unit tests cover the fixture.
+          for mac in $(cat /sys/class/net/*/address 2>/dev/null | sort -u); do
+            case "$mac" in
+              00:00:00:00:00:00 | '') continue ;;
+            esac
+            if grep -qF "$mac" /tmp/dash.txt /tmp/plain.txt; then
+              echo "a MAC address reached the output: $mac" >&2
+              exit 1
+            fi
+          done
+
           # --- memory modules -----------------------------------------------------
           # Unprivileged runs must explain themselves rather than printing "unknown",
           # which reads as a failed probe. Containers have no SMBIOS access at all.

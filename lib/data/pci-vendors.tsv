@@ -1,0 +1,46 @@
+# PCI vendor names, as a fallback for when pci.ids is not installed.
+#
+# Columns, tab-separated:
+#   id  name
+#
+#   id    the four hex digits sysfs reports in /sys/bus/pci/devices/*/vendor
+#   name  a short form, not the legal entity — "Intel", not "Intel Corporation".
+#         Panel width is scarce and nobody reads a suffix twice.
+#
+# The real database is pci.ids, shipped by the hwdata package: /usr/share/hwdata on
+# Fedora and Arch, /usr/share/misc on Debian. Where it exists it wins, because it names
+# the *device* as well as the vendor and is updated by someone whose job that is.
+#
+# It is frequently absent — a minimal container has no reason to carry 1.6 MB of device
+# names, and neither debian:stable-slim nor fedora:latest ships it. So this table exists
+# to keep the graphics and network panels useful in exactly the environments the smoke
+# matrix runs in. It deliberately covers only vendors whose parts show up in a display
+# or network slot; anything else falls through to the raw hex ID, which is enough to
+# look up by hand.
+#
+# Data as of: 2026-08-02. PCI vendor IDs are permanent once assigned, so this ages far
+# better than the other tables here — the risk is omission, not staleness.
+
+1002	AMD/ATI
+1022	AMD
+10de	NVIDIA
+8086	Intel
+1af4	Red Hat Virtio
+1414	Microsoft
+15ad	VMware
+1234	QEMU
+1b36	Red Hat QXL
+1d0f	Amazon
+5333	S3 Graphics
+1a03	ASPEED
+102b	Matrox
+1013	Cirrus Logic
+14e4	Broadcom
+10ec	Realtek
+1969	Qualcomm Atheros
+168c	Qualcomm Atheros
+14c3	MediaTek
+1d6a	Aquantia
+15b3	Mellanox
+1077	QLogic
+19a2	Emulex

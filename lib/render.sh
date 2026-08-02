@@ -462,7 +462,7 @@ _df_load_logo() {
 render_dashboard() {
   local cols width logo_w body_w
   # shellcheck disable=SC2034  # filled through namerefs by the _df_build_* helpers
-  local -a p_system p_distro p_cpu p_mem p_machine
+  local -a p_system p_distro p_cpu p_mem p_machine p_gpu p_net p_periph
 
   DF_D_ID="$(detect_distro_id)"
   DF_D_VERSION="$(detect_distro_version)"
@@ -502,6 +502,12 @@ render_dashboard() {
     local half2=$((body_w - 1 - half))
     _df_build_system p_system "$half"
     _df_build_distro p_distro "$half2"
+    # Graphics and network take the full width for the same reason memory does: a PCI
+    # device name is long by nature ("Intel Raptor Lake-P [Iris Xe Graphics]"), and
+    # clipping it removes the only part anyone reads.
+    _df_build_graphics p_gpu "$body_w"
+    _df_build_network p_net "$body_w"
+    _df_build_peripherals p_periph "$body_w"
     # Three panels take the full width, each for its own reason: the processor panel
     # carries a vendor logo in its gutter, a DIMM line carries locator, size, type,
     # form factor, both speeds, and a part number, and the machine panel holds vendor
@@ -515,18 +521,27 @@ render_dashboard() {
     _df_logo_beside p_system p_distro "$logo_w" "$half" "$half2"
     _df_indent_panel p_cpu "$logo_w"
     _df_indent_panel p_mem "$logo_w"
+    _df_indent_panel p_gpu "$logo_w"
+    _df_indent_panel p_net "$logo_w"
+    _df_indent_panel p_periph "$logo_w"
     _df_indent_panel p_machine "$logo_w"
   else
     _df_build_system p_system "$body_w"
     _df_build_distro p_distro "$body_w"
     _df_build_cpu p_cpu "$body_w"
     _df_build_memory p_mem "$body_w"
+    _df_build_graphics p_gpu "$body_w"
+    _df_build_network p_net "$body_w"
+    _df_build_peripherals p_periph "$body_w"
     _df_build_machine p_machine "$body_w"
 
     _df_logo_stack p_system "$logo_w" "$body_w"
     _df_indent_panel p_distro "$logo_w"
     _df_indent_panel p_cpu "$logo_w"
     _df_indent_panel p_mem "$logo_w"
+    _df_indent_panel p_gpu "$logo_w"
+    _df_indent_panel p_net "$logo_w"
+    _df_indent_panel p_periph "$logo_w"
     _df_indent_panel p_machine "$logo_w"
   fi
 }
@@ -787,7 +802,7 @@ _df_currency_row() {
 
   behind=$((latest_o - ordinal))
   if [ "$behind" -le 0 ]; then
-    printf 'Currency%scurrent — %s is the newest known generation' \
+    printf 'Currency%scurrent: %s is the newest known generation' \
       "$DF_FS" "$latest_label"
     return 0
   fi
@@ -849,6 +864,123 @@ _df_build_machine() {
     "Firmware${DF_FS}$(detect_bios)"
 }
 
+_df_build_graphics() {
+  local -n _out="$1"
+  local w="$2"
+  local -a rows=()
+  local line vendor device driver kind name label
+
+  while IFS='|' read -r vendor device driver kind; do
+    [ -n "$vendor" ] || continue
+    name="$(hwdata_pci_name "$vendor" "$device")"
+    case "$kind" in
+      3d) label="3D" ;;
+      display) label="Display" ;;
+      *) label="GPU" ;;
+    esac
+    rows+=("${label}${DF_FS}${name}${driver:+ (${driver})}")
+  done < <(detect_gpus)
+
+  if [ "${#rows[@]}" -eq 0 ]; then
+    # No display class device at all is normal on a server or in a container, and is a
+    # different answer from "there is one and I could not name it".
+    rows+=("GPU${DF_FS}none present")
+  fi
+
+  _df_panel _out GRAPHICS "$w" 9 - "${rows[@]}"
+}
+
+_df_build_network() {
+  local -n _out="$1"
+  local w="$2"
+  local -a rows=()
+  local name kind vendor device driver state speed model link
+
+  while IFS='|' read -r name kind vendor device driver state speed; do
+    [ -n "$name" ] || continue
+    model="$(hwdata_pci_name "$vendor" "$device")"
+
+    if [ -n "$speed" ]; then
+      link="$state, $(dev_speed_human "$speed")"
+    else
+      link="$state"
+    fi
+    # Wireless has no single negotiated rate to report, and inventing one from the
+    # current PHY rate would change between reads.
+    [ "$kind" = wifi ] && link="$link, Wi-Fi"
+
+    rows+=("${name}${DF_FS}${model}${driver:+ (${driver})} - ${link}")
+  done < <(detect_nics)
+
+  if [ "${#rows[@]}" -eq 0 ]; then
+    rows+=("Interfaces${DF_FS}none with a hardware device")
+  fi
+
+  _df_panel _out NETWORK "$w" 9 - "${rows[@]}"
+}
+
+_df_build_peripherals() {
+  local -n _out="$1"
+  local w="$2"
+  local -a rows=() order=()
+  local bus speed version ports name key best=0
+  local domain gen security iommu tvendor tdevice
+  local id dvendor ddevice authorized found_tbt=0
+  declare -A count ports_total label
+
+  # Grouped by speed class rather than listed per controller. Four lines saying
+  # "usb1: USB 2.0 ... usb3: USB 2.0 ..." carry one fact between them; the useful
+  # question is what speeds this machine can do and how many ports run at each.
+  while IFS='|' read -r bus speed version ports; do
+    [ -n "$bus" ] || continue
+    name="$(usb_speed_name "$speed")"
+    key="${speed:-0}"
+    case "$speed" in
+      '' | *[!0-9]*) ;;
+      *) [ "$speed" -gt "$best" ] && best="$speed" ;;
+    esac
+    if [ -z "${count[$key]:-}" ]; then
+      order+=("$key")
+      count[$key]=0
+      ports_total[$key]=0
+      label[$key]="${name:-USB} ($(dev_speed_human "$speed"))"
+    fi
+    count[$key]=$((count[$key] + 1))
+    ports_total[$key]=$((ports_total[$key] + ${ports:-0}))
+  done < <(detect_usb_buses)
+
+  if [ "${#order[@]}" -gt 0 ]; then
+    # Root-hub port counts do not sum to the sockets on the chassis: one USB-C
+    # connector is wired to a 2.0 root hub and a 3.x one at once, so the total is
+    # routinely double the number of holes in the case. Saying so costs a clause and
+    # stops the number being read as something it is not.
+    rows+=("USB${DF_FS}fastest $(dev_speed_human "$best"); root ports are per controller, not sockets")
+    for key in "${order[@]}"; do
+      rows+=("${DF_FS}  ${label[$key]}: ${count[$key]} controller$([ "${count[$key]}" = 1 ] || printf s), ${ports_total[$key]} root port$([ "${ports_total[$key]}" = 1 ] || printf s)")
+    done
+  else
+    rows+=("USB${DF_FS}no host controllers")
+  fi
+
+  while IFS='|' read -r domain gen security iommu tvendor tdevice; do
+    [ -n "$domain" ] || continue
+    found_tbt=1
+    rows+=("Thunderbolt${DF_FS}${domain}: $(tbt_generation_name "$gen")${tvendor:+, ${tvendor} ${tdevice}}")
+    rows+=("${DF_FS}  security: $(tbt_security_name "$security"); IOMMU DMA protection $(if [ "$iommu" = 1 ]; then printf on; else printf off; fi)")
+  done < <(detect_thunderbolt)
+
+  if [ "$found_tbt" -eq 0 ]; then
+    rows+=("Thunderbolt${DF_FS}no Thunderbolt or USB4 controller")
+  fi
+
+  while IFS='|' read -r id dvendor ddevice authorized; do
+    [ -n "$id" ] || continue
+    rows+=("${DF_FS}  attached ${id}: ${dvendor} ${ddevice}$(if [ "$authorized" = 1 ]; then printf ' (authorised)'; else printf ' (not authorised)'; fi)")
+  done < <(detect_thunderbolt_devices)
+
+  _df_panel _out PERIPHERALS "$w" 11 - "${rows[@]}"
+}
+
 # ---------------------------------------------------------------------------
 # The plain report
 # ---------------------------------------------------------------------------
@@ -881,6 +1013,10 @@ render_plain() {
   _df_plain_field 'Cache:' "$(detect_cpu_cache)"
   _df_plain_field 'Memory:' "$(detect_memory)"
   _df_plain_field 'Swap:' "$(detect_swap)"
+  _df_plain_field 'GPU:' "$(_df_plain_gpus)"
+  _df_plain_field 'Network:' "$(_df_plain_nics)"
+  _df_plain_field 'USB:' "$(_df_plain_usb)"
+  _df_plain_field 'TBolt:' "$(_df_plain_tbt)"
   _df_plain_field 'Machine:' "$(detect_machine)"
   _df_plain_field 'Firmware:' "$(detect_bios)"
 }
@@ -904,6 +1040,46 @@ _df_plain_generation() {
     out="$out, $((latest_o - ordinal)) behind $latest_label"
   fi
   printf '%s' "$out"
+}
+
+# The device lists as one line each, for the plain report. Multiple devices are joined
+# with "; " rather than wrapped, so the one-fact-per-line contract holds.
+_df_plain_gpus() {
+  local vendor device driver kind out=""
+  while IFS='|' read -r vendor device driver kind; do
+    [ -n "$vendor" ] || continue
+    out="${out:+$out; }$(hwdata_pci_name "$vendor" "$device")${driver:+ ($driver)}"
+  done < <(detect_gpus)
+  printf '%s' "${out:-none present}"
+}
+
+_df_plain_nics() {
+  local name kind vendor device driver state speed out="" entry
+  while IFS='|' read -r name kind vendor device driver state speed; do
+    [ -n "$name" ] || continue
+    entry="$name $(hwdata_pci_name "$vendor" "$device") $state"
+    [ -n "$speed" ] && entry="$entry $(dev_speed_human "$speed")"
+    out="${out:+$out; }$entry"
+  done < <(detect_nics)
+  printf '%s' "${out:-none}"
+}
+
+_df_plain_usb() {
+  local bus speed version ports out=""
+  while IFS='|' read -r bus speed version ports; do
+    [ -n "$bus" ] || continue
+    out="${out:+$out; }${bus} $(usb_speed_name "$speed") $(dev_speed_human "$speed") ${ports:-0} root ports"
+  done < <(detect_usb_buses)
+  printf '%s' "${out:-none}"
+}
+
+_df_plain_tbt() {
+  local domain gen security iommu tvendor tdevice out=""
+  while IFS='|' read -r domain gen security iommu tvendor tdevice; do
+    [ -n "$domain" ] || continue
+    out="${out:+$out; }${domain} $(tbt_generation_name "$gen") security=$security"
+  done < <(detect_thunderbolt)
+  printf '%s' "${out:-none}"
 }
 
 _df_plain_field() {

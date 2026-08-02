@@ -296,6 +296,88 @@ hwdata_cpu_logo_name() {
   esac
 }
 
+# --- PCI names -------------------------------------------------------------
+
+# Where pci.ids lives, or nothing. Fedora and Arch put it under /usr/share/hwdata,
+# Debian under /usr/share/misc. It is part of the hwdata package and frequently absent
+# from containers, which is why there is a fallback at all.
+: "${DF_PCI_IDS:=}"
+
+_hw_pci_ids_path() {
+  local f
+  if [ -n "$DF_PCI_IDS" ]; then
+    [ -r "$DF_PCI_IDS" ] && printf '%s' "$DF_PCI_IDS"
+    return 0
+  fi
+  for f in /usr/share/hwdata/pci.ids /usr/share/misc/pci.ids /usr/share/pci.ids; do
+    if [ -r "$f" ]; then
+      printf '%s' "$f"
+      return 0
+    fi
+  done
+}
+
+# Short vendor name from the bundled table, or nothing.
+_hw_pci_vendor_fallback() {
+  local want="$1" line id name
+  [ -n "$want" ] || return 0
+  while IFS= read -r line; do
+    IFS=$'\t' read -r id name <<<"$line"
+    if [ "$id" = "$want" ]; then
+      printf '%s' "$name"
+      return 0
+    fi
+  done < <(_hw_table pci-vendors.tsv || true)
+}
+
+# "Intel Raptor Lake-P [Iris Xe Graphics]" for a vendor/device pair, degrading to
+# "Intel [8086:a7a0]" and then to "[8086:a7a0]" as sources run out.
+#
+# pci.ids is 1.6 MB and roughly 25 000 lines, so it is never read line by line in the
+# shell. sed extracts the one vendor block and grep picks the device out of it — both
+# in C, both over a file the kernel has in page cache anyway. Measured at ~15 ms.
+hwdata_pci_name() {
+  # Initialised, not merely declared: `local x` leaves x *unset*, and under `set -u`
+  # reading it is a fatal error. Every assignment below is inside a conditional, so on
+  # a system with no pci.ids none of them run — which is two of the three CI images.
+  local vendor="$1" device="$2" file="" vname="" dname="" line="" short=""
+  [ -n "$vendor" ] || return 0
+
+  file="$(_hw_pci_ids_path)"
+  if [ -n "$file" ]; then
+    line="$(grep -m1 "^$vendor  " "$file" 2>/dev/null)" || line=""
+    vname="${line#"$vendor"  }"
+    if [ -n "$device" ]; then
+      # One sed, no pipeline. The range runs from this vendor's line to the next
+      # vendor's line; device lines inside it are tab-indented, which is what
+      # distinguishes them from vendor lines. `q` stops at the first match.
+      #
+      # This was `sed ... | grep -m1 ...` and looked correct: grep exits at the first
+      # match, sed takes SIGPIPE, and under `set -o pipefail` the whole pipeline
+      # reports failure — so the `|| dname=""` fallback fired on every *successful*
+      # lookup and every device came out as a bare hex ID.
+      dname="$(sed -n \
+        "/^$vendor  /,/^[0-9a-f][0-9a-f][0-9a-f][0-9a-f]  /{/^	$device  /{s/^	$device  //p;q;};}" \
+        "$file" 2>/dev/null)" || dname=""
+    fi
+  fi
+
+  # The bundled short name wins for the *vendor* even when pci.ids is present, while
+  # pci.ids still supplies the *device*. pci.ids gives legal entities — "Intel
+  # Corporation", "Advanced Micro Devices, Inc. [AMD/ATI]" — and a panel row has better
+  # uses for eleven columns than a corporate suffix nobody reads twice.
+  short="$(_hw_pci_vendor_fallback "$vendor")"
+  [ -n "$short" ] && vname="$short"
+
+  if [ -n "$vname" ] && [ -n "$dname" ]; then
+    printf '%s %s' "$vname" "$dname"
+  elif [ -n "$vname" ]; then
+    printf '%s [%s:%s]' "$vname" "$vendor" "$device"
+  else
+    printf '[%s:%s]' "$vendor" "$device"
+  fi
+}
+
 # --- logos -----------------------------------------------------------------
 
 # Distros that share a parent's artwork, or whose ID does not match a file name. Kept

@@ -263,6 +263,61 @@ setup() {
   [ "$output" = generic ]
 }
 
+# --- PCI names -------------------------------------------------------------
+
+@test "a vendor and device both resolve when pci.ids is available" {
+  if [ -z "$(_hw_pci_ids_path)" ]; then
+    skip "no pci.ids on this system; the fallback path is covered below"
+  fi
+  run hwdata_pci_name 8086 a7a0
+  [ "$status" -eq 0 ]
+  [[ "$output" == Intel*Graphics* ]]
+}
+
+# The bundled short name wins for the vendor even when pci.ids is present: pci.ids
+# gives legal entities, and a panel row has better uses for eleven columns.
+@test "the vendor short name is preferred over the pci.ids legal name" {
+  if [ -z "$(_hw_pci_ids_path)" ]; then
+    skip "no pci.ids on this system"
+  fi
+  run hwdata_pci_name 8086 a7a0
+  [[ "$output" != *"Intel Corporation"* ]]
+  [[ "$output" == Intel*
+ ]] || [[ "$output" == Intel* ]]
+}
+
+@test "without pci.ids the vendor still resolves and the device falls back to hex" {
+  DF_PCI_IDS=/nonexistent run hwdata_pci_name 10de 2684
+  [ "$status" -eq 0 ]
+  [ "$output" = 'NVIDIA [10de:2684]' ]
+}
+
+@test "an unknown vendor degrades to the bare identifiers" {
+  DF_PCI_IDS=/nonexistent run hwdata_pci_name abcd 1234
+  [ "$output" = '[abcd:1234]' ]
+}
+
+@test "no vendor at all yields nothing" {
+  run hwdata_pci_name '' ''
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+# `sed | grep -m1` looks right and is not: grep exits at the first match, sed takes
+# SIGPIPE, and under `set -o pipefail` the pipeline reports failure — so the fallback
+# fired on every successful lookup and every device came out as a bare hex ID.
+@test "device lookup survives pipefail" {
+  if [ -z "$(_hw_pci_ids_path)" ]; then
+    skip "no pci.ids on this system"
+  fi
+  run bash -c "set -euo pipefail
+    DISTROFETCH_DATA='$DISTROFETCH_DATA'
+    . '$BATS_TEST_DIRNAME/../lib/hwdata.sh'
+    hwdata_pci_name 8086 a7a0"
+  [ "$status" -eq 0 ]
+  [[ "$output" != *'[8086:a7a0]'* ]]
+}
+
 # --- logo resolution -------------------------------------------------------
 
 @test "a distro with its own logo file uses it" {

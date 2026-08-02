@@ -357,6 +357,112 @@ require_utf8() {
   done
 }
 
+# --- device panels ---------------------------------------------------------
+#
+# Driven from the sysfs fixtures rather than the host, so these assert the same thing
+# on a laptop with integrated graphics and on a CI runner with no display adapter at
+# all. FIXTURE_ENV is every seam at once.
+
+fixture_env() {
+  local r="$BATS_TEST_DIRNAME/fixtures/sysfs"
+  printf 'DF_SYS_PCI=%s/pci DF_SYS_NET=%s/net DF_SYS_USB=%s/usb DF_SYS_TBT=%s/thunderbolt' \
+    "$r" "$r" "$r" "$r"
+}
+
+@test "the dashboard shows every device panel" {
+  COLUMNS=140 run "$DF" --no-color
+  [ "$status" -eq 0 ]
+  for section in GRAPHICS NETWORK PERIPHERALS; do
+    [[ "$output" == *"$section"* ]]
+  done
+}
+
+@test "switchable graphics show both adapters, labelled" {
+  COLUMNS=140 run env $(fixture_env) "$DF" --no-color
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"GPU"* ]]
+  [[ "$output" == *"3D"* ]]
+  [[ "$output" == *"NVIDIA"* ]]
+}
+
+@test "physical interfaces are shown and virtual ones are not" {
+  COLUMNS=140 run env $(fixture_env) "$DF" --no-color
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"eth0"* ]]
+  [[ "$output" == *"wlan0"* ]]
+  [[ "$output" != *"docker0"* ]]
+  [[ "$output" != *"tailscale0"* ]]
+}
+
+@test "a down link is shown as down with no speed attached to it" {
+  COLUMNS=140 run env $(fixture_env) "$DF" --no-color
+  [[ "$output" == *"eth1"* ]]
+  [[ "$output" != *"-1 Mbps"* ]]
+  [[ "$output" != *"-1 Gbps"* ]]
+}
+
+# The output is designed to be screenshotted. A MAC address is a durable unique
+# identifier for the machine, so it must never reach the screen.
+@test "no MAC address reaches the dashboard" {
+  COLUMNS=140 run env $(fixture_env) "$DF" --no-color
+  [[ "$output" != *"de:ad:be:ef"* ]]
+  COLUMNS=140 run env $(fixture_env) "$DF" --no-art --no-color
+  [[ "$output" != *"de:ad:be:ef"* ]]
+}
+
+@test "USB buses are grouped by speed class with a fastest-bus summary" {
+  COLUMNS=140 run env $(fixture_env) "$DF" --no-color
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"USB 2.0 (480 Mbps): 2 controllers"* ]]
+  [[ "$output" == *"USB4 (40 Gbps): 1 controller"* ]]
+  [[ "$output" == *"fastest 40 Gbps"* ]]
+}
+
+# Root-hub port counts do not map to sockets on the chassis: one USB-C connector is
+# wired to a 2.0 root hub and a 3.x one at once. The output has to say so.
+@test "the USB panel says root ports are not sockets" {
+  COLUMNS=140 run env $(fixture_env) "$DF" --no-color
+  [[ "$output" == *"not sockets"* ]]
+}
+
+@test "Thunderbolt domains report generation and security policy" {
+  COLUMNS=140 run env $(fixture_env) "$DF" --no-color
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Thunderbolt 4 / USB4 (40 Gbps)"* ]]
+  [[ "$output" == *"Thunderbolt 3 (40 Gbps)"* ]]
+  [[ "$output" == *"connections need approval"* ]]
+  [[ "$output" == *"full PCIe access"* ]]
+}
+
+@test "an attached Thunderbolt device is listed with its authorisation state" {
+  COLUMNS=140 run env $(fixture_env) "$DF" --no-color
+  [[ "$output" == *"CalDigit TS4"* ]]
+  [[ "$output" == *"not authorised"* ]]
+}
+
+@test "a machine with none of this hardware says so rather than failing" {
+  local empty="$BATS_TEST_TMPDIR/none"
+  mkdir -p "$empty"
+  COLUMNS=140 DF_SYS_PCI="$empty" DF_SYS_NET="$empty" DF_SYS_USB="$empty" \
+    DF_SYS_TBT="$empty" run "$DF" --no-color
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"none present"* ]]
+  [[ "$output" == *"no host controllers"* ]]
+  [[ "$output" == *"no Thunderbolt or USB4 controller"* ]]
+}
+
+@test "the plain report carries each device class on one line" {
+  run env $(fixture_env) "$DF" --no-art --no-color
+  [ "$status" -eq 0 ]
+  for label in 'GPU:' 'Network:' 'USB:' 'TBolt:'; do
+    [[ "$output" == *"$label"* ]]
+  done
+  # One fact per line means multiple devices are joined, never wrapped.
+  local gpu_lines
+  gpu_lines="$(printf '%s\n' "$output" | grep -c '^GPU:')"
+  [ "$gpu_lines" -eq 1 ]
+}
+
 # --- hardware and release facts -------------------------------------------
 
 @test "the dashboard reports a support status for this distro" {

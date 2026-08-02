@@ -46,8 +46,19 @@ the same make target you just ran.
   handling, and breaking it breaks the renderer silently.
 - Anything printed to a terminal must have a non-TTY path. Check `[ -t 1 ]`, do not
   assume.
-- Four libraries: `detect.sh` probes the machine, `dmi.sh` reads DMI and SMBIOS,
-  `hwdata.sh` looks up what the machine cannot know about itself, `render.sh` draws.
+- Five libraries: `detect.sh` probes the machine, `dmi.sh` reads DMI and SMBIOS,
+  `devices.sh` enumerates what is attached, `hwdata.sh` looks up what the machine cannot
+  know about itself, `render.sh` draws.
+- `devices.sh` breaks the one-line rule on purpose: one line per device, **or nothing**.
+  Nothing is the answer for a container with no GPU; `unknown` cannot say it. Fields that
+  could not be determined are empty, never the string `unknown`.
+- **Never read a stable hardware identifier.** DIMM serials, PCI serials, MAC addresses.
+  Skip the path entirely rather than reading and discarding, so no later change to the
+  formatting can leak one.
+- Only add a device fact that has a fixed shape in sysfs — a class code, a rate in
+  Mbit/s, an integer generation. Anything needing a per-vendor branch to *read* (VRAM,
+  GPU temperature, fan speed) is a non-goal, and that is the line that keeps this from
+  becoming neofetch.
 - New fact means: a probe in `detect.sh`, a row in the relevant `_df_build_*` panel, a
   line in `render_plain`, a case in the bats shape test, and a label in the smoke
   workflow's field list. All five, or the smoke test passes while the feature is missing.
@@ -61,6 +72,14 @@ the same make target you just ran.
 - `[ test ] && assign` as the last statement of a function returns 1 when the test is
   false, and under `set -euo pipefail` that kills the caller. Use `if`. This has bitten
   this codebase three times.
+- `local x` **declares** x but leaves it unset, and `set -u` makes reading it fatal.
+  Initialise anything whose assignment is inside a conditional: `local x=""`.
+- `cmd | grep -m1 ...` fails under `set -o pipefail`. grep exits at the first match, the
+  writer takes SIGPIPE, and the pipeline reports failure on success. Use a single tool
+  that stops on its own, such as `sed ... {p;q}`.
+- `readlink -f` prints a path whose last component does not exist. Test `-L` before
+  resolving a sysfs `driver` symlink, or an unbound device reports its driver as the
+  literal string `driver`.
 - Bundled tables in `lib/data/` are snapshots. A live source always wins; a miss prints
   `unknown`. Never fill a gap with arithmetic or a policy rule — a visible gap is a bug
   report, a confident wrong date is not.
