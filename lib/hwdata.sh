@@ -206,6 +206,14 @@ hwdata_cpu_gen_ordinal() {
   local model_name="$1" vendor="$2" family="$3" model="$4"
   local want line f_v f_f f_m gen
 
+  # Server parts are off the consumer ladder, and family/model cannot always say so:
+  # EPYC Naples and Ryzen Summit Ridge are both family 23 model 1. The brand string can,
+  # and an EPYC reported as "Ryzen 5000" is a confidently wrong answer about someone's
+  # hardware — which is exactly what a CI runner reported before this check existed.
+  case "$model_name" in
+    *EPYC* | *epyc* | *Xeon* | *XEON* | *xeon*) return 0 ;;
+  esac
+
   # "13th Gen Intel(R) Core(TM) i7-1360P" -> 13. Intel has printed this marker in the
   # brand string since Skylake, and it is the only self-describing source available.
   case "$model_name" in

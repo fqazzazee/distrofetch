@@ -774,7 +774,13 @@ _df_currency_row() {
   local ordinal="$1" latest_o="$2" latest_label="$3" latest_year="$4"
   local behind level=""
 
-  if [ -z "$ordinal" ] || [ -z "$latest_o" ]; then
+  # "unknown" would be wrong here: for a server part the Generation row has already
+  # said why there is no ordinal, and repeating it as a failed lookup reads as a bug.
+  if [ -z "$ordinal" ]; then
+    printf 'Currency%snot applicable' "$DF_FS"
+    return 0
+  fi
+  if [ -z "$latest_o" ]; then
     printf 'Currency%sunknown' "$DF_FS"
     return 0
   fi

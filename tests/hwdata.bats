@@ -166,12 +166,28 @@ setup() {
   [ "$output" = 5 ]
 }
 
-# Xeon Scalable and EPYC do not sit on the consumer ladder, so they carry `-` and must
-# produce nothing rather than a number that would be compared against Core generations.
+# Xeon Scalable and EPYC do not sit on the consumer ladder and must produce nothing
+# rather than a number that would be compared against Core or Ryzen generations.
 @test "a server part reports no generation at all" {
   run hwdata_cpu_gen_ordinal "INTEL(R) XEON(R) PLATINUM 8573C" GenuineIntel 6 207
   [ "$status" -eq 0 ]
   [ -z "$output" ]
+
+  run hwdata_cpu_gen_ordinal "AMD EPYC 7763 64-Core Processor" AuthenticAMD 25 1
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+# EPYC Naples and Ryzen Summit Ridge are both family 23 model 1, so family/model alone
+# cannot tell a server part from a desktop one. A CI runner reported its EPYC 7763 as
+# "Ryzen 5000 (Zen 3)" before the brand string was consulted — a confidently wrong
+# answer about someone's own hardware, which is the worst kind this tool can give.
+@test "the brand string separates EPYC from Ryzen at the same family and model" {
+  run hwdata_cpu_gen_ordinal "AMD EPYC 7551 32-Core Processor" AuthenticAMD 23 1
+  [ -z "$output" ]
+
+  run hwdata_cpu_gen_ordinal "AMD Ryzen 7 1800X Eight-Core Processor" AuthenticAMD 23 1
+  [ "$output" = 1 ]
 }
 
 @test "an unknown CPU reports no generation" {
