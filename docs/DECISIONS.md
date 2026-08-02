@@ -8,6 +8,82 @@ decision, it is a preference.
 
 ---
 
+## 2026-08-02 — Wrapping replaces truncation, and fitting becomes opt-in
+
+**Status:** accepted — supersedes "The dashboard fits the terminal by dropping detail"
+
+**Context:** The dashboard clipped values that did not fit, marking the cut with an
+ellipsis, and dropped rows to fit the terminal height. In use that hid the part of a
+device name that identifies it — `Intel Raptor Lake-P [Iris Xe Grap...` — with no way to
+recover it. The maintainer's instruction was that scrolling is acceptable and hidden
+text is not.
+
+**Decision:** Never truncate. Values wrap onto the next line, indented under the value
+column. Panels size to their content rather than to the window. The height-fitting
+system stays but moves behind `--fit`, off by default.
+
+**Alternatives:** Keeping truncation and widening the cap — rejected: it moves the
+threshold without removing the failure. Horizontal scrolling — terminals do not have it;
+long lines wrap or are lost.
+
+**Consequences:** `--fit` is now weaker than the behaviour it replaced. A condensed
+panel that wraps is *taller* than one that clipped, so the floor went from roughly 25
+lines to roughly 35, and below that nine panels do not fit at all. That is the correct
+trade — it fails visibly rather than hiding a fact — but it does mean `--fit` cannot
+promise what the previous default appeared to promise. Sizing to content also made panel
+width depend on what the machine has to say, which is why two tests that asserted
+specific rows at a given height had to be rewritten as relationships: a CI runner has
+less to report than a laptop and condenses differently at the same size.
+
+---
+
+## 2026-08-02 — A palette with roles, and a hue per panel
+
+**Status:** accepted
+
+**Context:** Everything was green. That is the project's identity, and it is also a wall
+of text once there are nine panels.
+
+**Decision:** Every colour goes through a named role — border, title, key, value, muted,
+accent, ok, warn, alert — and each panel heading gets its own hue. `vivid` is the
+default; `matrix` keeps the original all-green look. The rain keeps its greens under
+both.
+
+**Alternatives:** Colouring values by type — rejected: colour then means two things at
+once, and the meaning that matters (an expired release, a disconnected port) stops
+standing out. Keeping green as the default and shipping vivid as opt-in — rejected
+because the request was to stop being green-only, and an opt-in default is not that.
+
+**Consequences:** Green, amber, and red now carry meaning rather than decoration, which
+constrains future rows: anything that uses them is asserting something is good, aging, or
+wrong. A theme is one table, so adding one is a block of assignments and no other change.
+
+---
+
+## 2026-08-02 — Every interface is listed, including the ones doing nothing
+
+**Status:** accepted
+
+**Context:** Reported as "network is not showing disconnected interfaces". The panel
+enumerated only interfaces with a backing device, which excluded bridges, tunnels, and
+container veths entirely, and the device test used `-e`, which fails on a dangling
+symlink — what an unbound or half-removed device leaves behind.
+
+**Decision:** Enumerate every interface. Hardware ones get full detail including
+`no carrier (nothing plugged in)` when the port is empty; virtual ones are classified by
+the directories the kernel creates for them and listed on one muted row.
+
+**Alternatives:** Keeping the filter and fixing only the dangling-symlink case —
+rejected: a list that has already dropped an interface cannot answer "where did my
+ethernet go", which is the question the panel exists for. Name-matching virtual
+interfaces — rejected; the list needs extending for every new kind, while `bridge/`,
+`bonding/`, and `tun_flags` do not.
+
+**Consequences:** The panel is longer on a machine with containers. That is information
+rather than noise, and it is muted so it does not compete with the hardware.
+
+---
+
 ## 2026-08-02 — The dashboard fits the terminal by dropping detail, not by resizing type
 
 **Status:** accepted

@@ -22,58 +22,67 @@ network calls, no writes, and no root.
 
 ```console
 $ distrofetch
-distrofetch 0.1.0                                                                                            tesla@fadis-zenbook14
-──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+distrofetch 0.1.0                                                                                                 tesla@fadis-zenbook14
+───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
-       _____    ┌─ SYSTEM ─────────────────────────────────────────────┐ ┌─ DISTRIBUTION ────────────────────────────────────────┐
-      /   __)\  │ OS        Fedora Linux 44 (Workstation Edition)      │ │ ID        fedora                                      │
-      |  /  \ \ │ Kernel    Linux 7.1.5-201.fc44.x86_64                │ │ Version   44                                          │
-   ___|  |__/ / │ Arch      x86_64                                     │ │ Codename  none                                        │
-  / (_    _)_/  │ Uptime    2d 21h 47m                                 │ │ Released  unknown                                     │
- / /  |  |      │ Shell     bash                                       │ │ Support   supported until 2027-05-19 (289 days)       │
- \ \__/  |      │ Packages  2809 (rpm)                                 │ │                                                       │
-  \(_____/      └──────────────────────────────────────────────────────┘ └───────────────────────────────────────────────────────┘
-                ┌─ PROCESSOR ────────────────────────────────────────────────────────────────────────────────────────────────────┐
-                │   _       _       _   Model      13th Gen Intel(R) Core(TM) i7-1360P (16)                                      │
-                │  (_)_ __ | |_ ___| |  Vendor     Intel                                                                         │
-                │  | | '_ \| __/ _ \ |  Generation 13th Gen Core, released 2022                                                  │
-                │  | | | | | ||  __/ |  Currency   3 generations behind Core Ultra Series 2 (2024)                               │
-                │  |_|_| |_|\__\___|_|  Micro-arch Raptor Lake, launched 2023, Intel 7                                           │
-                │                       Signature  family 6, model 186, stepping 2, ucode 0x6134                                 │
-                │                       Topology   12 cores / 16 threads                                                         │
-                │                       Clock      0.5 GHz now, 5.0 GHz max                                                      │
-                │                       Cache      48K L1d, 32K L1i, 1280K L2, 18432K L3                                         │
-                │                       Features   AVX2, AES-NI, SHA-NI, VT-x                                                    │
-                └────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
-                ┌─ MEMORY ───────────────────────────────────────────────────────────────────────────────────────────────────────┐
-                │ RAM       5.8 GiB / 15.2 GiB                                                                                   │
-                │ Swap      0.4 GiB / 7.9 GiB                                                                                    │
-                │ Modules   needs root: run sudo distrofetch                                                                     │
-                └────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
-                ┌─ STORAGE ──────────────────────────────────────────────────────────────────────────────────────────────────────┐
-                │ nvme0n1   1.0 TB NVMe WD PC SN560 SDDPNQE-1T00-1102 - PCIe 4.0 x4                                              │
-                └────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
-                ┌─ GRAPHICS ─────────────────────────────────────────────────────────────────────────────────────────────────────┐
-                │ GPU       Intel Raptor Lake-P [Iris Xe Graphics] (i915)                                                        │
-                └────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
-                ┌─ NETWORK ──────────────────────────────────────────────────────────────────────────────────────────────────────┐
-                │ wlo1      Intel Raptor Lake PCH CNVi WiFi (iwlwifi) - CNVi, generation set by the RF module not the PCI ID, up │
-                └────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
-                ┌─ PERIPHERALS ──────────────────────────────────────────────────────────────────────────────────────────────────┐
-                │ USB         fastest 20 Gbps; root ports are per controller, not sockets                                        │
-                │   USB 2.0 (480 Mbps): 2 controllers, 13 root ports                                                             │
-                │   USB 3.2 Gen 2x2 (20 Gbps): 1 controller, 3 root ports                                                        │
-                │   USB 3.2 Gen 2 (10 Gbps): 1 controller, 4 root ports                                                          │
-                │ Thunderbolt domain0: Thunderbolt 4 / USB4 (40 Gbps), INTEL Gen12                                               │
-                │   security: user - connections need approval; IOMMU DMA protection on                                          │
-                │ Thunderbolt domain1: Thunderbolt 4 / USB4 (40 Gbps), INTEL Gen12                                               │
-                │   security: user - connections need approval; IOMMU DMA protection on                                          │
-                └────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
-                ┌─ MACHINE ──────────────────────────────────────────────────────────────────────────────────────────────────────┐
-                │ Model     ASUSTeK COMPUTER INC. Zenbook Flip UP3404VA_UP3404VA                                                 │
-                │ Board     ASUSTeK COMPUTER INC. UP3404VA                                                                       │
-                │ Firmware  UP3404VA.301 (2023-05-11)                                                                            │
-                └────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+       _____    ┌─ SYSTEM ────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+      /   __)\  │ OS        Fedora Linux 44 (Workstation Edition)                                                                     │
+      |  /  \ \ │ Kernel    Linux 7.1.5-201.fc44.x86_64                                                                               │
+   ___|  |__/ / │ Arch      x86_64                                                                                                    │
+  / (_    _)_/  │ Uptime    3d 1h 43m                                                                                                 │
+ / /  |  |      │ Shell     bash                                                                                                      │
+ \ \__/  |      │ Packages  2812 (rpm)                                                                                                │
+  \(_____/      └─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+                ┌─ DISTRIBUTION ──────────────────────────────────────────────────────────────────────────────────────────────────────┐
+                │ ID        fedora                                                                                                    │
+                │ Version   44                                                                                                        │
+                │ Codename  none                                                                                                      │
+                │ Released  unknown                                                                                                   │
+                │ Support   supported until 2027-05-19 (289 days)                                                                     │
+                └─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+                ┌─ PROCESSOR ─────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+                │   _       _       _   Model      13th Gen Intel(R) Core(TM) i7-1360P (15)                                           │
+                │  (_)_ __ | |_ ___| |  Vendor     Intel                                                                              │
+                │  | | '_ \| __/ _ \ |  Generation 13th Gen Core, released 2022                                                       │
+                │  | | | | | ||  __/ |  Currency   3 generations behind Core Ultra Series 2 (2024)                                    │
+                │  |_|_| |_|\__\___|_|  Micro-arch Raptor Lake, launched 2023, Intel 7                                                │
+                │                       Signature  family 6, model 186, stepping 2, ucode 0x6134                                      │
+                │                       Topology   12 cores / 16 threads                                                              │
+                │                       Clock      0.8 GHz now, 5.0 GHz max                                                           │
+                │                       Cache      48K L1d, 32K L1i, 1280K L2, 18432K L3                                              │
+                │                       Features   AVX2, AES-NI, SHA-NI, VT-x                                                         │
+                └─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+                ┌─ MEMORY ────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+                │ RAM       5.8 GiB / 15.2 GiB                                                                                        │
+                │ Channels  4 channels across 2 controllers, 8 slots                                                                  │
+                │ Swap      0.6 GiB / 7.9 GiB                                                                                         │
+                │ Modules   needs root: run sudo distrofetch                                                                          │
+                └─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+                ┌─ STORAGE ───────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+                │ nvme0n1   1.0 TB NVMe WD PC SN560 SDDPNQE-1T00-1102 - PCIe Gen 4 x4 (4 lanes)                                       │
+                └─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+                ┌─ GRAPHICS ──────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+                │ GPU       Intel Raptor Lake-P [Iris Xe Graphics] (i915)                                                             │
+                └─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+                ┌─ NETWORK ───────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+                │ wlo1      Intel Raptor Lake PCH CNVi WiFi (iwlwifi) - up, CNVi, generation set by the RF module not the PCI ID      │
+                │ Virtual   br-df56d9872e83 (bridge, down) docker0 (bridge, down) lo (loopback, unknown) tailscale0 (tunnel, unknown) │
+                └─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+                ┌─ PERIPHERALS ───────────────────────────────────────────────────────────────────────────────────────────────────────┐
+                │ USB         fastest 20 Gbps; root ports are per controller, not sockets                                             │
+                │   USB 2.0 (480 Mbps): 2 controllers, 13 root ports                                                                  │
+                │   USB 3.2 Gen 2x2 (20 Gbps): 1 controller, 3 root ports                                                             │
+                │   USB 3.2 Gen 2 (10 Gbps): 1 controller, 4 root ports                                                               │
+                │ Thunderbolt domain0: Thunderbolt 4 / USB4 (40 Gbps), INTEL Gen12                                                    │
+                │   security: user - connections need approval; IOMMU DMA protection on                                               │
+                │ Thunderbolt domain1: Thunderbolt 4 / USB4 (40 Gbps), INTEL Gen12                                                    │
+                │   security: user - connections need approval; IOMMU DMA protection on                                               │
+                └─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+                ┌─ MACHINE ───────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+                │ Model     ASUSTeK COMPUTER INC. Zenbook Flip UP3404VA_UP3404VA                                                      │
+                │ Board     ASUSTeK COMPUTER INC. UP3404VA                                                                            │
+                │ Firmware  UP3404VA.301 (2023-05-11)                                                                                 │
+                └─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 Two panel columns when the terminal is wide enough, one when it is not, and a plain list
@@ -107,14 +116,23 @@ or the freshly-installed box where you have not yet installed anything.
   parks cores, the naive count changes between runs. Offline cores are noted, not hidden.
 - **Your memory modules**: size, type, form factor, rated *and* configured speed, and
   manufacturer. The gap between rated and configured is how you notice XMP is off.
-- **What your NVMe drive is actually running at.** `PCIe 4.0 x4` — and when it has
-  negotiated below what it and the slot can do, `PCIe 3.0 x2 (max 4.0 x4)`. A Gen4 drive
+- **How many memory channels you are running**, from EDAC — which is world-readable,
+  unlike the SMBIOS tables that carry the same topology behind mode `0400`. Single
+  versus dual channel is the largest memory-performance fact about a machine and it is
+  invisible everywhere else.
+- **What your NVMe drive is actually running at.** `PCIe Gen 4 x4 (4 lanes)` — and when
+  it has negotiated below what it and the slot can do, `PCIe Gen 3 x2 (2 lanes), capable
+  of Gen 4 x4`. A Gen4 drive
   in a Gen3 slot runs at half throughput and nothing else on the system tells you.
 - **Which Wi-Fi generation your card is** — `Wi-Fi 6E`, `Wi-Fi 7` — read from the device
   name, because neither sysfs nor an unprivileged `ethtool` will say. For Intel CNVi
   parts it reports that the generation *cannot* be known from the PCI ID rather than
   guessing: CNVi puts the wireless MAC in the chipset and the radio in a separate
   module, so two machines with the same ID can differ.
+- **Every interface, including the ones with nothing plugged in.** A port with no cable
+  says `no carrier (nothing plugged in)` rather than being filtered out — a list that has
+  already dropped an interface cannot answer "where did my ethernet go". Bridges,
+  tunnels, loopback, and container veths are listed too, on one muted row.
 - **Rated versus negotiated ethernet speed**, where the device name states a rating. The
   gap between them is a bad cable or a switch port stuck at 100 Mbps, and neither number
   identifies that alone.
@@ -173,28 +191,63 @@ unprivileged; `sudo distrofetch` just fills in that one panel. The module *seria
 is never read at all — it is a durable hardware identifier, and this output exists to be
 screenshotted.
 
-## It fits on one screen
+## It scales to the window, and never hides a fact
 
-The dashboard clears the screen and measures the terminal, then drops detail until it
-fits the height — first the rows that restate something (signature, cache, board), then
-the per-device breakdowns, then it pairs panels two across, and last it drops the logo.
-Panels with nothing to report disappear rather than spending three lines to say so.
+Panels are as wide as their content and never wider than the window. **Nothing is ever
+truncated** — a value too long for its panel wraps onto the next line, indented under
+the value column. A clipped `Intel Raptor Lake-P [Iris Xe Grap...` hides the part that
+identifies the thing, and there is no way to get it back.
 
-The order is strictly decreasing in information, so what you get is always the most
-complete layout that fits. Give it a taller or wider window and it fills it.
+That means the dashboard is as tall as it needs to be, and the terminal scrolls. If you
+would rather it fit:
 
 ```bash
-distrofetch --no-clear    # draw in place, leaving scrollback alone
+distrofetch --fit        # drop detail until it fits the height
+distrofetch --no-clear   # draw in place, leaving scrollback alone
 ```
 
-Below roughly 26 lines it will overflow rather than hide what the machine is. And it
-will not change font size to fit: terminals have no portable way to do that. `DECDWL`
+`--fit` drops the rows that restate something (signature, cache, board), then pairs
+panels two across, then drops the logo — in that order, strictly decreasing in
+information. It will not truncate to get there, so a condensed panel is *taller* than a
+clipped one used to be and roughly 35 lines is as small as nine panels go.
+
+On a window wide enough for two full-width columns, panels pair automatically — no
+narrowing, no wrapping, half the height.
+
+It will not change font size to fit: terminals have no portable way to do that. `DECDWL`
 and `DECDHL` exist in the VT100 repertoire, but kitty, alacritty, and most modern
 emulators ignore them, and where they work they halve the columns on that line and break
-every alignment guarantee in the layout. Hierarchy here comes from the palette and from
-what gets dropped.
+every alignment guarantee in the layout. There is no control for a *smaller* font even in
+principle.
 
-## Logos
+## Colour
+
+Two themes. `vivid` is the default: a distinct hue per panel heading so the eye can find
+`STORAGE` without reading the others, a steel-blue key column, near-white values, and
+green/amber/red reserved for things that carry meaning — an expired release, a
+disconnected port.
+
+```bash
+distrofetch --theme=matrix   # the original all-green look
+```
+
+The glyph rain keeps its greens under either theme. It is the one part of this program
+that is a reference rather than an interface.
+
+## Progress
+
+Probing takes long enough to look like a hang — the package-manager query alone is
+hundreds of milliseconds on a machine with thousands of packages. distrofetch says what
+it is doing while it works, then clears the line:
+
+```
+  reading installed packages...
+```
+
+Only on a terminal, and only when the screen is going to be cleared anyway, so it can
+never end up in something you are piping. `--quiet` turns it off.
+
+## Logos## Logos
 
 Roughly twenty distributions have their own art, and a derivative borrows its parent's
 via `ID_LIKE`. Anything unrecognised gets a generic penguin.
@@ -266,21 +319,22 @@ tesla@fadis-zenbook14
 OS:        Fedora Linux 44 (Workstation Edition)
 Kernel:    Linux 7.1.5-201.fc44.x86_64
 Arch:      x86_64
-Uptime:    2d 21h 47m
-Packages:  2809 (rpm)
+Uptime:    3d 1h 43m
+Packages:  2812 (rpm)
 Shell:     bash
 Released:  unknown
 Support:   supported until 2027-05-19 (289 days)
 CPU:       13th Gen Intel(R) Core(TM) i7-1360P (16)
 CPU gen:   13th Gen Core (2022), 3 behind Core Ultra Series 2
 Cores:     12 cores / 16 threads
-Clock:     1.2 GHz now, 5.0 GHz max
+Clock:     0.8 GHz now, 5.0 GHz max
 Cache:     48K L1d, 32K L1i, 1280K L2, 18432K L3
-Memory:    5.8 GiB / 15.2 GiB
-Swap:      0.4 GiB / 7.9 GiB
-Disks:     nvme0n1 1.0 TB NVMe WD PC SN560 SDDPNQE-1T00-1102 PCIe 4.0 x4
+Memory:    5.9 GiB / 15.2 GiB
+Channels:  4 channels, 2 controllers, 8 slots
+Swap:      0.6 GiB / 7.9 GiB
+Disks:     nvme0n1 1.0 TB NVMe WD PC SN560 SDDPNQE-1T00-1102 PCIe Gen 4 x4 (4 lanes)
 GPU:       Intel Raptor Lake-P [Iris Xe Graphics] (i915)
-Network:   wlo1 Intel Raptor Lake PCH CNVi WiFi up
+Network:   br-df56d9872e83 (bridge, down); docker0 (bridge, down); lo (loopback, unknown); tailscale0 (tunnel, unknown); wlo1 Intel Raptor Lake PCH CNVi WiFi up
 USB:       usb1 USB 2.0 480 Mbps 1 root ports; usb2 USB 3.2 Gen 2x2 20 Gbps 3 root ports; usb3 USB 2.0 480 Mbps 12 root ports; usb4 USB 3.2 Gen 2 10 Gbps 4 root ports
 TBolt:     domain0 Thunderbolt 4 / USB4 (40 Gbps) security=user; domain1 Thunderbolt 4 / USB4 (40 Gbps) security=user
 Machine:   ASUSTeK COMPUTER INC. Zenbook Flip UP3404VA_UP3404VA
@@ -302,6 +356,10 @@ distrofetch --color=always | less -R
 | `--logo=NAME` | auto | Force a specific distro logo |
 | `--no-logo` | | Dashboard without the logo column |
 | `--no-art` | | Plain `Label: value` lines: no panels, no logo |
+| `--no-clear` | | Draw in place instead of clearing the screen |
+| `--fit` | | Drop detail until the dashboard fits the terminal height |
+| `--theme=NAME` | `vivid` | `vivid` or `matrix` |
+| `-q`, `--quiet` | | No progress output while probing |
 | `--list-logos` | | Print the bundled logo names and exit |
 | `-d`, `--duration N` | `0` | Seconds of rain before the dashboard; `0` means none |
 | `-n`, `--no-rain` | | Skip the animation — the default, kept for explicitness |

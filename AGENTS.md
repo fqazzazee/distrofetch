@@ -65,6 +65,11 @@ the same make target you just ran.
 - The report is drawn twice from the same data: once as panels, once plain. Anything
   that changes a line's visible width has to go through `_df_panel`, which is told the
   width separately because `${#}` counts ANSI escapes and multibyte characters wrong.
+- **Never truncate a value.** Wrapping costs a row; clipping costs the fact. An
+  ellipsis in this output is a bug.
+- Colour goes through a role (`DF_KEY`, `DF_VALUE`, `DF_MUTED`, …), never a raw escape.
+  `DF_OK`, `DF_WARN`, and `DF_ALERT` mean something is good, aging, or wrong — using
+  them for decoration takes that away.
 - **`${#str}` counts bytes outside a UTF-8 locale.** Never measure a rendered line. The
   frame is built by repetition so its width is known; logos are ASCII so theirs can be
   measured; values must be ASCII for the same reason — an em dash in a value silently
@@ -85,6 +90,9 @@ the same make target you just ran.
   depends on must be cached before the loop, and a panel's **width cannot be chosen
   before the drop pass** — dropping an empty panel shifts every later one across the
   pairing.
+- An unmatched glob is left literal by bash, so `for d in "$DIR"/*/` yields `$DIR/*/`
+  when the directory is empty. Every enumerator needs `[ -d "$d" ] || continue`, or an
+  absent sysfs tree is reported as a device named `*`.
 - **git cannot store an empty directory.** A fixture tree that relies on one works
   locally and arrives broken in CI: the symlinks survive, the directories they point at
   do not. Every fixture directory needs a file in it, and nothing may depend on a

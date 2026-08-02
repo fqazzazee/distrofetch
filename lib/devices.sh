@@ -26,6 +26,7 @@
 : "${DF_SYS_USB:=/sys/bus/usb/devices}"
 : "${DF_SYS_TBT:=/sys/bus/thunderbolt/devices}"
 : "${DF_SYS_BLOCK:=/sys/block}"
+: "${DF_SYS_EDAC:=/sys/devices/system/edac/mc}"
 
 # Contents of a sysfs attribute with the trailing newline stripped, or nothing. sysfs
 # reads can fail with EINVAL or ENODEV on a device that is asleep or being removed, so
@@ -75,6 +76,7 @@ _dev_hex() {
 detect_gpus() {
   local d class kind vendor device driver
   for d in "$DF_SYS_PCI"/*/; do
+    [ -d "$d" ] || continue
     class="$(_dev_read "$d/class")"
     case "$class" in
       0x0300*) kind=vga ;;
@@ -100,33 +102,130 @@ detect_gpus() {
 # The MAC address is never read. It is a durable, globally unique identifier for the
 # machine, and this output is designed to be posted.
 detect_nics() {
-  local n name kind vendor device driver state speed
+  local n name kind vendor device driver state speed carrier
+
   for n in "$DF_SYS_NET"/*/; do
+    # An unmatched glob is left literal by bash, so an empty or missing directory
+    # would otherwise be reported as an interface named "*". The old device-symlink
+    # test happened to filter it; nothing does now that virtual interfaces are kept.
+    [ -d "$n" ] || continue
     name="${n%/}"
     name="${name##*/}"
-    [ -e "$n/device" ] || continue
 
-    if [ -d "$n/wireless" ] || [ -e "$n/phy80211" ]; then
-      kind=wifi
+    # -e follows the symlink and fails on a dangling one, which is what a device
+    # mid-removal or an unbound driver leaves behind. -L catches those: the interface
+    # is still hardware and still worth reporting.
+    if [ -e "$n/device" ] || [ -L "$n/device" ]; then
+      if [ -d "$n/wireless" ] || [ -e "$n/phy80211" ]; then
+        kind=wifi
+      else
+        kind=ethernet
+      fi
+      vendor="$(_dev_hex "$(_dev_read "$n/device/vendor")")"
+      device="$(_dev_hex "$(_dev_read "$n/device/device")")"
+      driver="$(_dev_driver "$n/device")"
     else
-      kind=ethernet
+      # No backing device: a bridge, tunnel, loopback, or container veth. Reported
+      # rather than skipped — "why is my ethernet missing" is answered by seeing every
+      # interface the kernel has, and a filtered list cannot answer it.
+      kind="$(_dev_virtual_kind "$n" "$name")"
+      vendor=""
+      device=""
+      driver=""
     fi
 
-    vendor="$(_dev_hex "$(_dev_read "$n/device/vendor")")"
-    device="$(_dev_hex "$(_dev_read "$n/device/device")")"
-    driver="$(_dev_driver "$n/device")"
     state="$(_dev_read "$n/operstate")"
 
-    # speed is negotiated link rate in Mbit/s. It reads as -1 when the link is down and
-    # is absent entirely on wireless, where there is no single negotiated rate.
+    # carrier is 1 with a cable in and 0 without. Reading it on a down interface
+    # returns EINVAL, which is why a missing value means "not applicable" here and not
+    # "no link".
+    carrier="$(_dev_read "$n/carrier")"
+
+    # speed is the negotiated link rate in Mbit/s. It reads as -1 when the link is down
+    # and is absent on wireless, where there is no single negotiated rate.
     speed="$(_dev_read "$n/speed")"
     case "$speed" in
       '' | -*) speed="" ;;
     esac
 
-    printf '%s|%s|%s|%s|%s|%s|%s\n' \
-      "$name" "$kind" "$vendor" "$device" "$driver" "$state" "$speed"
+    printf '%s|%s|%s|%s|%s|%s|%s|%s\n' \
+      "$name" "$kind" "$vendor" "$device" "$driver" "$state" "$speed" "$carrier"
   done
+}
+
+# What kind of virtual interface this is, from the directories the kernel creates for
+# each type. Name matching would need extending for every new kind; these do not.
+_dev_virtual_kind() {
+  local dir="$1" name="$2" type
+  type="$(_dev_read "$dir/type")"
+  [ "$type" = 772 ] && {
+    printf 'loopback'
+    return 0
+  }
+  [ -d "$dir/bridge" ] && {
+    printf 'bridge'
+    return 0
+  }
+  [ -d "$dir/bonding" ] && {
+    printf 'bond'
+    return 0
+  }
+  [ -e "$dir/tun_flags" ] && {
+    printf 'tunnel'
+    return 0
+  }
+  case "$name" in
+    veth* | vnet*) printf 'veth' ;;
+    wg*) printf 'wireguard' ;;
+    *) printf 'virtual' ;;
+  esac
+}
+
+# --- memory topology -------------------------------------------------------
+
+# channels|controllers|slots from EDAC, or nothing.
+#
+# EDAC is the only unprivileged source for memory topology: SMBIOS carries it too, but
+# behind mode 0400. Each memory controller exposes one directory per DIMM slot with a
+# `dimm_location` reading "channel 0 slot 1", so counting distinct controller/channel
+# pairs gives the channel count without any privilege at all.
+#
+# The count is of channels the controllers expose, not of channels populated — on a
+# soldered LPDDR5 machine those are the same thing, and on a socketed board an empty
+# channel is still a channel the board has.
+detect_memory_channels() {
+  local mc d location chan controllers=0 slots=0 seen=""
+  local channels=0
+
+  [ -d "$DF_SYS_EDAC" ] || return 0
+
+  for mc in "$DF_SYS_EDAC"/mc[0-9]*/; do
+    [ -d "$mc" ] || continue
+    controllers=$((controllers + 1))
+    for d in "$mc"dimm[0-9]*/; do
+      [ -d "$d" ] || continue
+      slots=$((slots + 1))
+      location="$(_dev_read "$d/dimm_location")"
+      # "channel 0 slot 1" -> 0. Anything else is left alone and simply not counted.
+      case "$location" in
+        channel\ *)
+          chan="${location#channel }"
+          chan="${chan%% *}"
+          # A channel is only distinct within its own controller.
+          case " $seen " in
+            *" ${mc}:${chan} "*) ;;
+            *)
+              seen="$seen ${mc}:${chan}"
+              channels=$((channels + 1))
+              ;;
+          esac
+          ;;
+      esac
+    done
+  done
+
+  [ "$controllers" -gt 0 ] || return 0
+  printf '%s|%s|%s' "$channels" "$controllers" "$slots"
 }
 
 # --- USB -------------------------------------------------------------------
@@ -228,17 +327,20 @@ pcie_link() {
   max_gen="$(pcie_gen_from_speed "$max_speed")"
   [ -n "$cur_gen" ] || return 0
 
-  out="PCIe $cur_gen"
+  # "PCIe Gen 4 x4 (4 lanes)" rather than "PCIe 4.0 x4": the generation is what a drive
+  # is sold as, and the lane count is the other half of the bandwidth that people are
+  # usually trying to find out.
+  out="PCIe Gen ${cur_gen%%.*}"
   case "$cur_width" in
     '' | 0 | *[!0-9]*) ;;
-    *) out="$out x$cur_width" ;;
+    *) out="$out x$cur_width ($cur_width lane$([ "$cur_width" = 1 ] || printf s))" ;;
   esac
 
   # Only mention the maximum when it differs, so the common case stays short.
   if [ -n "$max_gen" ] && { [ "$max_gen" != "$cur_gen" ] || [ "$max_width" != "$cur_width" ]; }; then
     case "$max_width" in
-      '' | 0 | 255 | *[!0-9]*) out="$out (max $max_gen)" ;;
-      *) out="$out (max $max_gen x$max_width)" ;;
+      '' | 0 | 255 | *[!0-9]*) out="$out, capable of Gen ${max_gen%%.*}" ;;
+      *) out="$out, capable of Gen ${max_gen%%.*} x$max_width" ;;
     esac
   fi
   printf '%s' "$out"
@@ -257,6 +359,7 @@ pcie_link() {
 detect_disks() {
   local b name size rot model transport pcie devdir
   for b in "$DF_SYS_BLOCK"/*/; do
+    [ -d "$b" ] || continue
     name="${b%/}"
     name="${name##*/}"
     case "$name" in

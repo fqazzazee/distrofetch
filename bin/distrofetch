@@ -62,6 +62,9 @@ Options:
       --no-logo      dashboard without the logo column
       --no-art       plain label/value lines: no panels, no logo
       --no-clear     do not clear the screen before drawing
+      --fit          drop detail until the dashboard fits the terminal height
+      --theme=NAME   vivid (default) or matrix
+  -q, --quiet        no progress output while probing
       --list-logos   print the bundled logo names and exit
   -d, --duration N   seconds of rain before the dashboard (default: 0)
   -n, --no-rain      skip the animation; the default, kept for explicitness
@@ -75,10 +78,14 @@ nine panels — system, distribution, processor, memory, storage, graphics,
 network, peripherals, machine — beside the logo of the running distro, and
 clears the screen first so the result is one screenshot.
 
-It measures the terminal and drops detail until it fits: first the rows that
-restate something (signature, cache, board), then the per-device breakdowns.
-Below 56 columns it falls back to the plain list. Give it a taller or wider
-window and it fills it.
+Panels are as wide as their content and never wider than the window, and a
+value too long for its panel wraps rather than being cut off. Below 56 columns
+it falls back to the plain list.
+
+Nothing is dropped to save space unless you ask: --fit trades detail for
+height, dropping the rows that restate something, then pairing panels two
+across, then the logo. Without it the dashboard keeps everything and the
+terminal scrolls.
 
 --no-art gives that plain list directly. Use it when something is reading
 this output: it is one fact per line, no frame, no logo.
@@ -124,7 +131,7 @@ list_logos() {
 main() {
   # Rain is opt-in: a duration of 0 means no animation at all.
   # Color is resolved after parsing, since auto depends on the TTY check below.
-  local rain=1 color=1 duration=0 color_mode=auto art=1 logo=auto clear=1
+  local rain=1 color=1 duration=0 color_mode=auto art=1 logo=auto clear=1 fit=0 quiet=0 theme=vivid
 
   while [ $# -gt 0 ]; do
     case "$1" in
@@ -132,6 +139,14 @@ main() {
       --no-art) art=0 ;;
       --no-logo) logo=none ;;
       --no-clear) clear=0 ;;
+      --fit) fit=1 ;;
+      --quiet | -q) quiet=1 ;;
+      --theme=*) theme="${1#--theme=}" ;;
+      --theme)
+        [ $# -ge 2 ] || die "--theme needs a value: vivid or matrix"
+        theme="$2"
+        shift
+        ;;
       --logo=*) logo="${1#--logo=}" ;;
       --logo)
         [ $# -ge 2 ] || die "--logo needs a name; --list-logos prints them"
@@ -208,9 +223,17 @@ main() {
       ;;
   esac
 
+  case "$theme" in
+    vivid | matrix) ;;
+    *) die "--theme must be vivid or matrix (got: $theme)" ;;
+  esac
+
+  DF_THEME="$theme"
   render_init "$color" "$art"
   DF_LOGO="$logo"
   DF_CLEAR="$clear"
+  DF_FIT="$fit"
+  DF_PROGRESS=$((1 - quiet))
   if [ "$rain" -eq 1 ]; then
     render_rain "$duration"
   fi

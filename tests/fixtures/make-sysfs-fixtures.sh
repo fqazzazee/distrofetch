@@ -79,11 +79,29 @@ mkiface wlan0 0x8086 0x51f1 iwlwifi up '' wifi
 
 # Virtual interfaces: no device symlink, so they must not be enumerated. Named after
 # the real ones that show up on a developer machine.
-for v in lo docker0 br-df56d9872e83 tailscale0 veth0; do
-  mkdir -p "$net/$v"
-  printf 'unknown\n' >"$net/$v/operstate"
-  printf '%s\n' 'de:ad:be:ef:00:99' >"$net/$v/address"
-done
+# Each kind is identified by the directories the kernel creates for it, not by name,
+# so the fixture has to create those directories for the classification to be exercised.
+mkvirtual() {
+  local name="$1" type="$2" marker="$3"
+  mkdir -p "$net/$name"
+  printf 'unknown\n' >"$net/$name/operstate"
+  printf '%s\n' "$type" >"$net/$name/type"
+  printf '%s\n' 'de:ad:be:ef:00:99' >"$net/$name/address"
+  case "$marker" in
+    '') ;;
+    tun_flags) printf '0x0001\n' >"$net/$name/tun_flags" ;;
+    *)
+      mkdir -p "$net/$name/$marker"
+      printf '0\n' >"$net/$name/$marker/stp_state"
+      ;;
+  esac
+}
+
+mkvirtual lo 772 ''
+mkvirtual docker0 1 bridge
+mkvirtual br-df56d9872e83 1 bridge
+mkvirtual tailscale0 65534 tun_flags
+mkvirtual veth0 1 ''
 
 # --- USB: four buses across three speed classes ----------------------------
 
@@ -172,6 +190,21 @@ for junk in loop0 loop7 ram0 zram0 dm-0 sr0; do
   mkdir -p "$block/$junk/queue"
   printf '0\n' >"$block/$junk/size"
   printf '0\n' >"$block/$junk/queue/rotational"
+done
+
+# --- EDAC: two controllers, two channels each, four slots apiece -----------
+
+edac="$root/edac"
+mkdir -p "$edac"
+for mc in 0 1; do
+  for d in 0 1 2 3; do
+    mkdir -p "$edac/mc$mc/dimm$d"
+    printf 'channel %s slot %s\n' $((d / 2)) $((d % 2)) \
+      >"$edac/mc$mc/dimm$d/dimm_location"
+    printf 'MC#%s_Chan#%s_DIMM#%s\n' "$mc" $((d / 2)) $((d % 2)) \
+      >"$edac/mc$mc/dimm$d/dimm_label"
+    printf '2048\n' >"$edac/mc$mc/dimm$d/size"
+  done
 done
 
 printf 'sysfs fixtures written to %s\n' "$root"

@@ -149,21 +149,52 @@ fresh install and wants the specs without installing a toolchain first.
     negotiated speed. The gap between them is a cable or a switch port, and neither
     number identifies that alone.
 
-### Fitting the terminal
+### Layout
 
-34. Clear the screen before drawing, on a terminal only, and only once the dashboard is
+34. **Never truncate a value.** A value too long for its panel wraps onto the next line,
+    indented under the value column. Clipping hides the part of a device name that
+    identifies it, and there is no way to recover it from the output.
+35. Size panels to their content: as wide as the widest row wants, never wider than the
+    window, never so narrow that the frame costs more than it earns.
+36. Pair panels side by side when the window can hold two at their full content width.
+    Pairing that forces wrapping is a height optimisation, not a layout one, and belongs
+    behind `--fit`.
+37. Grow the key column to the longest key a panel carries, capped, so an interface named
+    `br-df56d9872e83` does not push every value out of alignment.
+38. Clear the screen before drawing, on a terminal only, and only once the dashboard is
     ready — a failed run leaves the screen it found. `--no-clear` disables it.
-35. Measure the terminal and drop detail until the dashboard fits its height. Attempts
-    run in strictly decreasing order of information: full, compact, minimal, then the
-    same three with panels paired two across, then without the logo. The result is
-    always the most complete layout that fits.
-36. Drop a panel whose every row is a "none present" answer at the tightest densities. A
-    panel that costs three lines to say nothing is worse than its absence, and on a
-    container there are three of them.
-37. Never claim to fit what cannot fit. Below roughly 26 lines the dashboard overflows,
-    and that is preferable to hiding the machine's identity.
+39. Let the terminal scroll by default. `--fit` drops detail until the dashboard fits the
+    height: the rows that restate something, then paired panels, then the logo, strictly
+    decreasing in information. It must not truncate to get there, so it will fail to fit
+    a terminal shorter than roughly 35 lines and that is the correct outcome.
+40. Drop a panel whose every row is a "none present" answer under `--fit`. A panel that
+    costs three lines to say nothing is worse than its absence.
 
-### The animation
+### Colour
+
+41. Every colour goes through a named role — border, title, key, value, muted, accent,
+    ok, warn, alert — so a theme is one table rather than a search and replace.
+42. Give each panel heading its own hue. A dashboard where every heading is the same
+    colour is a wall of text.
+43. Reserve green, amber, and red for meaning: an expired release, a disconnected port,
+    a link below its rating. Decoration uses the rest of the palette.
+44. Ship `vivid` as the default and `matrix` as the original all-green look. The glyph
+    rain keeps its greens under both — it is a reference, not an interface.
+
+### Progress
+
+45. Report what is being probed while probing, on a terminal, and only when the screen
+    will be cleared afterwards. The package-manager query alone is hundreds of
+    milliseconds and the silence reads as a hang.
+46. Never let progress output reach a pipe.
+
+### Memory topology
+
+47. Report the number of memory channels, controllers, and slots from EDAC, which is
+    world-readable — SMBIOS carries the same topology behind mode 0400. Count channels
+    per controller: channel 0 of one controller is not channel 0 of another.
+
+### The animation### The animation
 
 18. Animate falling glyphs before the dashboard, for a duration the user controls. The
     animation is opt-in: the default duration is `0`, which skips it entirely.
@@ -393,6 +424,8 @@ on every push. <!-- assumed --> arm64 is expected to work but is not tested.
   from sysfs with a fixed shape — a PCI class code, a link speed in Mbit/s, a generation
   integer — and none of it needs a per-vendor branch. Anything requiring per-vendor code
   to *read* is still out.
+- **Truncating a value to make it fit.** Superseded 2026-08-02: the layout wrapped
+  instead. An ellipsis in this output means a fact was thrown away.
 - **Per-region font sizes.** Terminals have no portable mechanism for this. `DECDWL`
   and `DECDHL` (double-width and double-height lines) exist in the VT100 repertoire but
   are unimplemented in kitty, alacritty, and most modern emulators, and where they do
@@ -444,8 +477,14 @@ on every push. <!-- assumed --> arm64 is expected to work but is not tested.
 - [ ] A Wi-Fi device whose name carries a generation reports it; a CNVi part explains
       why it cannot
 - [ ] A 2.5 GbE NIC is not reported as 5 GbE
-- [ ] The dashboard fits at 60, 40, and 30 lines, and the screen-clear escape never
-      reaches a pipe
+- [ ] No output contains an ellipsis at 60, 80, 100, 140, or 200 columns
+- [ ] `--fit` fits at heights where wrapping allows it, and truncates nothing to do so
+- [ ] Both themes render, and the screen-clear escape and progress output never reach a
+      pipe
+- [ ] Memory channels are reported where EDAC exists, and nothing is claimed where it
+      does not
+- [ ] A disconnected interface is shown and says it has no carrier; virtual interfaces
+      are listed rather than filtered out
 - [ ] An unprivileged run states why module detail is unavailable rather than printing
       `unknown`
 - [ ] A rolling release reports no end of life; an expired release reports its overrun;

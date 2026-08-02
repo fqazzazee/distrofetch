@@ -42,6 +42,8 @@ Current phase only. See `ROADMAP.md` for the phase and its exit condition.
 - [x] Graphics, network, USB, and Thunderbolt panels
 - [x] Storage panel with NVMe PCIe link detail
 - [x] Fit-to-terminal density system with screen clear
+- [x] Wrapping instead of truncation, content-sized panels
+- [x] Memory channels, full interface list, colour palette, progress output
 - [x] Branch protection on `main` requiring all six checks
 
 ## Blocked
