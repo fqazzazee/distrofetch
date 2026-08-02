@@ -51,7 +51,7 @@ jobs:
         run: ${{ matrix.bootstrap }}
 
       # checkout needs git present, which is why bootstrap runs first.
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # No job here pushes, so the checkout has no use for a token in
           # .git/config where later steps — and anything they run — can read it.
