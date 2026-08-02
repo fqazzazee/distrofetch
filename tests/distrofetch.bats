@@ -28,7 +28,8 @@ require_utf8() {
 @test "--help mentions every documented flag" {
   run "$DF" --help
   [ "$status" -eq 0 ]
-  for flag in --no-rain --no-art --no-color --duration --version --help; do
+  for flag in --no-rain --no-art --no-logo --logo --list-logos --no-color \
+    --duration --version --help; do
     [[ "$output" == *"$flag"* ]]
   done
 }
@@ -50,9 +51,9 @@ require_utf8() {
 }
 
 @test "--duration 0 is accepted and prints the report" {
-  run "$DF" --duration 0 --no-color
+  COLUMNS=120 run "$DF" --duration 0 --no-color
   [ "$status" -eq 0 ]
-  [[ "$output" == *"OS:"* ]]
+  [[ "$output" == *"SYSTEM"* ]]
 }
 
 @test "the help text documents 0 as the default duration" {
@@ -69,10 +70,11 @@ require_utf8() {
   [[ "$output" != *$'\033'* ]]
 }
 
-@test "the report runs clean and labels every field" {
-  run "$DF" --no-color
+@test "the dashboard runs clean and labels every field" {
+  COLUMNS=120 run "$DF" --no-color
   [ "$status" -eq 0 ]
-  for label in OS: Kernel: Arch: Uptime: Packages: Shell: CPU: Memory:; do
+  for label in OS Kernel Arch Uptime Packages Shell Model Vendor Topology \
+    Cache Features RAM Swap Board Firmware Support; do
     [[ "$output" == *"$label"* ]]
   done
 }
@@ -132,22 +134,32 @@ require_utf8() {
   [[ "$output" != *$'\033'* ]]
 }
 
-# --- banner and box -------------------------------------------------------
+# --- dashboard layout -----------------------------------------------------
 
-@test "the default report is framed and carries the banner" {
-  run "$DF" --no-color
+@test "the default output is the dashboard: panels, a logo, and every section" {
+  COLUMNS=120 run "$DF" --no-color
   [ "$status" -eq 0 ]
   [[ "$output" == *"┌"* ]]
   [[ "$output" == *"└"* ]]
-  [[ "$output" == *"█"* ]]
+  for section in SYSTEM DISTRIBUTION PROCESSOR MEMORY MACHINE; do
+    [[ "$output" == *"$section"* ]]
+  done
 }
 
-@test "--no-art drops the frame and the banner but keeps every field" {
+@test "--no-logo keeps the panels and drops the art" {
+  COLUMNS=120 run "$DF" --no-color --no-logo
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"┌"* ]]
+  [[ "$output" == *"PROCESSOR"* ]]
+}
+
+@test "--no-art drops the frame and the logo but keeps every field" {
   run "$DF" --no-art --no-color
   [ "$status" -eq 0 ]
   [[ "$output" != *"┌"* ]]
-  [[ "$output" != *"█"* ]]
-  for label in OS: Kernel: Arch: Uptime: Packages: Shell: CPU: Memory:; do
+  [[ "$output" != *"│"* ]]
+  for label in OS: Kernel: Arch: Uptime: Packages: Shell: CPU: Memory: Swap: \
+    Cores: Cache: Support: Machine: Firmware:; do
     [[ "$output" == *"$label"* ]]
   done
 }
@@ -158,55 +170,164 @@ require_utf8() {
   [[ "$output" != *$'\033'* ]]
 }
 
-# The box is 58 columns wide here. Drawing it in a 40-column terminal would wrap every
-# line; the plain report is the better failure mode.
-@test "the frame drops out on a terminal too narrow to hold it" {
+# Below the fallback threshold the panels cannot hold their own content, and wrapping
+# every line is worse than not drawing them.
+@test "a terminal too narrow for panels falls back to the plain list" {
   COLUMNS=40 run "$DF" --no-color
   [ "$status" -eq 0 ]
   [[ "$output" != *"┌"* ]]
   [[ "$output" == *"OS:"* ]]
 }
 
-@test "a wide terminal keeps the frame" {
-  COLUMNS=200 run "$DF" --no-color
+@test "a wide terminal lays the panels out in two columns" {
+  COLUMNS=160 run "$DF" --no-color
+  [ "$status" -eq 0 ]
+  # SYSTEM and DISTRIBUTION share a line only in the two-column layout.
+  [[ "$output" == *"SYSTEM"*"DISTRIBUTION"* ]]
+  local paired=0 line
+  for line in "${lines[@]}"; do
+    if [[ "$line" == *SYSTEM*DISTRIBUTION* ]]; then paired=1; fi
+  done
+  [ "$paired" -eq 1 ]
+}
+
+@test "a narrow-but-not-tiny terminal stacks the panels in one column" {
+  COLUMNS=70 run "$DF" --no-color
   [ "$status" -eq 0 ]
   [[ "$output" == *"┌"* ]]
-}
-
-# Every boxed line has to end at the same column, or the right edge visibly zigzags.
-@test "the frame's right edge is flush on every line" {
-  require_utf8
-  COLUMNS=200 run "$DF" --no-color
-  [ "$status" -eq 0 ]
-  local width=""
+  local paired=0 line
   for line in "${lines[@]}"; do
-    [[ "$line" == *"│"* || "$line" == *"┌"* || "$line" == *"├"* || "$line" == *"└"* ]] || continue
-    if [ -z "$width" ]; then
-      width="${#line}"
-    fi
-    [ "${#line}" -eq "$width" ]
+    if [[ "$line" == *SYSTEM*DISTRIBUTION* ]]; then paired=1; fi
   done
-  [ -n "$width" ]
+  [ "$paired" -eq 0 ]
 }
 
-# A value wider than the banner has to push the box out rather than overflow it.
-@test "a long value widens the frame instead of breaking it" {
+# Every panel border has to land in the same column, or the grid visibly shears. This
+# is the assertion that caught the header rule being one short and the logo column
+# being budgeted two spaces where it joins with one.
+@test "every panel line ends at the same column, at every width" {
   require_utf8
-  run env COLUMNS=200 USER="$(printf 'u%.0s' {1..90})" "$DF" --no-color
-  [ "$status" -eq 0 ]
-  [[ "$output" == *"┌"* ]]
-  local width=""
-  for line in "${lines[@]}"; do
-    [[ "$line" == *"│"* || "$line" == *"┌"* ]] || continue
-    if [ -z "$width" ]; then width="${#line}"; fi
-    [ "${#line}" -eq "$width" ]
+  local width edge first line plain
+  for width in 60 70 80 100 120 140 200; do
+    COLUMNS=$width run "$DF" --no-color
+    [ "$status" -eq 0 ]
+    first=""
+    for line in "${lines[@]}"; do
+      plain="${line%"${line##*[![:space:]]}"}"
+      case "$plain" in
+        *│ | *┐ | *┘) ;;
+        *) continue ;;
+      esac
+      edge="${#plain}"
+      if [ -z "$first" ]; then first="$edge"; fi
+      [ "$edge" -eq "$first" ]
+    done
+    [ -n "$first" ]
   done
-  [ "$width" -gt 58 ]
 }
 
-@test "an unknown --no-art-like typo is still rejected" {
-  run "$DF" --no-arts
+@test "no line exceeds the terminal width" {
+  require_utf8
+  local width line
+  for width in 60 80 100 140; do
+    COLUMNS=$width run "$DF" --no-color
+    [ "$status" -eq 0 ]
+    for line in "${lines[@]}"; do
+      [ "${#line}" -le "$width" ]
+    done
+  done
+}
+
+# --- logo selection -------------------------------------------------------
+
+@test "--list-logos names files that exist" {
+  run "$DF" --list-logos
+  [ "$status" -eq 0 ]
+  [ "${#lines[@]}" -gt 10 ]
+  local name
+  for name in "${lines[@]}"; do
+    [ -r "$BATS_TEST_DIRNAME/../lib/logos/$name.txt" ]
+  done
+}
+
+@test "--list-logos includes the generic fallback" {
+  run "$DF" --list-logos
+  [[ "$output" == *tux* ]]
+}
+
+@test "--logo selects a specific logo regardless of the running distro" {
+  COLUMNS=120 run "$DF" --no-color --logo=arch
+  [ "$status" -eq 0 ]
+  # The arch logo's last row is unmistakable.
+  [[ "$output" == *"/_-''"* ]]
+}
+
+@test "--logo accepts a space-separated value" {
+  COLUMNS=120 run "$DF" --no-color --logo tux
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"|o_o |"* ]]
+}
+
+@test "an unknown logo name is a usage error naming the way to list them" {
+  run "$DF" --logo=definitely-not-a-distro
   [ "$status" -eq 2 ]
+  [[ "$output" == *"--list-logos"* ]]
+}
+
+# A logo name is joined to a directory and a suffix, so a path would escape it.
+@test "--logo rejects a path rather than following it" {
+  run "$DF" --logo=../../etc/passwd
+  [ "$status" -eq 2 ]
+  run "$DF" --logo=/etc/passwd
+  [ "$status" -eq 2 ]
+}
+
+@test "--logo requires a value" {
+  run "$DF" --logo
+  [ "$status" -eq 2 ]
+}
+
+# Logos are measured with ${#}, which counts bytes outside a UTF-8 locale. Keeping them
+# ASCII is what makes the logo column the same width in every locale.
+@test "every bundled logo is pure ASCII and fits the layout budget" {
+  local f rows cols
+  for f in "$BATS_TEST_DIRNAME"/../lib/logos/*.txt; do
+    # Single-quoted so the shell does not touch the range, and LC_ALL=C so the
+    # bracket expression matches bytes: any byte outside printable ASCII fails.
+    run env LC_ALL=C grep -c '[^ -~]' "$f"
+    [ "$output" -eq 0 ]
+    rows="$(wc -l <"$f")"
+    cols="$(awk '{ if (length($0) > m) m = length($0) } END { print m + 0 }' "$f")"
+    [ "$rows" -le 20 ]
+    [ "$cols" -le 30 ]
+  done
+}
+
+# --- hardware and release facts -------------------------------------------
+
+@test "the dashboard reports a support status for this distro" {
+  COLUMNS=120 run "$DF" --no-color
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Support"* ]]
+}
+
+# Memory module detail is root-only. An unprivileged run must say why rather than
+# printing "unknown", which reads as a failed probe.
+@test "memory modules report their reason when the raw tables are unreadable" {
+  COLUMNS=120 DF_DMI_ENTRIES=/nonexistent run "$DF" --no-color
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"no SMBIOS tables"* ]]
+  [[ "$output" != *"Modules   unknown"* ]]
+}
+
+@test "memory modules are listed when the raw tables can be read" {
+  COLUMNS=140 DF_DMI_ENTRIES="$BATS_TEST_DIRNAME/fixtures/dmi-entries" \
+    run "$DF" --no-color
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"DDR5"* ]]
+  [[ "$output" == *"SK Hynix"* ]]
+  [[ "$output" == *"populated"* ]]
+  [[ "$output" != *SERIAL-DO-NOT-PRINT* ]]
 }
 
 @test "detection probes each return exactly one non-empty line" {

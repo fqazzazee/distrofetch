@@ -46,16 +46,26 @@ the same make target you just ran.
   handling, and breaking it breaks the renderer silently.
 - Anything printed to a terminal must have a non-TTY path. Check `[ -t 1 ]`, do not
   assume.
-- New probe means: a function in `detect.sh`, an entry in `_df_collect`'s two parallel
-  arrays, a case in the bats shape test, a label in the smoke workflow's field list, and
-  a bump to the plain-line count that workflow asserts. All five, or the smoke test
-  passes while the feature is missing.
-- The report is drawn twice from the same data: once framed, once plain. Anything that
-  changes a line's visible width has to go through `_df_boxed`, which is told the width
-  separately because `${#}` counts ANSI escapes and multibyte characters wrong.
-- `${#str}` counts bytes outside a UTF-8 locale. Never measure the banner or the frame
-  with it — the banner's width is the constant `DF_BANNER_WIDTH`, and the frame is built
-  by repetition so its width is known rather than measured.
+- Four libraries: `detect.sh` probes the machine, `dmi.sh` reads DMI and SMBIOS,
+  `hwdata.sh` looks up what the machine cannot know about itself, `render.sh` draws.
+- New fact means: a probe in `detect.sh`, a row in the relevant `_df_build_*` panel, a
+  line in `render_plain`, a case in the bats shape test, and a label in the smoke
+  workflow's field list. All five, or the smoke test passes while the feature is missing.
+- The report is drawn twice from the same data: once as panels, once plain. Anything
+  that changes a line's visible width has to go through `_df_panel`, which is told the
+  width separately because `${#}` counts ANSI escapes and multibyte characters wrong.
+- **`${#str}` counts bytes outside a UTF-8 locale.** Never measure a rendered line. The
+  frame is built by repetition so its width is known; logos are ASCII so theirs can be
+  measured; values must be ASCII for the same reason — an em dash in a value silently
+  shifts a panel edge in the C locale.
+- `[ test ] && assign` as the last statement of a function returns 1 when the test is
+  false, and under `set -euo pipefail` that kills the caller. Use `if`. This has bitten
+  this codebase three times.
+- Bundled tables in `lib/data/` are snapshots. A live source always wins; a miss prints
+  `unknown`. Never fill a gap with arithmetic or a policy rule — a visible gap is a bug
+  report, a confident wrong date is not.
+- The SMBIOS parser reads firmware-controlled binary data. Bounds-check every offset,
+  treat every field as data, and never read offset 0x18 (the module serial).
 
 ## Do not
 

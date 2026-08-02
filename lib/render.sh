@@ -1,8 +1,15 @@
 #!/usr/bin/env bash
-# Output layer: the palette, the falling-glyph animation, the banner, and the report.
+# Output layer: the palette, the falling-glyph animation, and the dashboard.
 #
 # Kept separate from detect.sh so the probes can be tested without a terminal, and so
 # the animation can be skipped entirely without touching detection logic.
+#
+# The dashboard is built from panels. A panel is an array of lines, every one padded to
+# the same visible width, so panels can be set side by side by concatenating them line
+# for line. Width is tracked separately from the strings because the strings carry ANSI
+# escapes, and because ${#} counts bytes rather than characters outside a UTF-8 locale
+# — every border character here is multibyte. The rule that follows from both: never
+# measure a rendered line, only the plain text that went into it.
 #
 # Sourced by bin/distrofetch.
 
@@ -16,14 +23,18 @@ DF_BRIGHT=""
 DF_BOLD=""
 DF_RESET=""
 DF_HEAD=""
+DF_WARN=""
+DF_ALERT=""
 
-# Five greens, dim to bright. The rain fades a stream through them as it falls and the
-# banner uses them top to bottom, so the two share one visual vocabulary.
+# Five greens, dim to bright. The rain fades a stream through them as it falls.
 DF_SHADES=("" "" "" "" "")
 
-# Set from --no-art. Off means the plain label/value report with no box and no banner,
-# which is what anything parsing this output wants.
+# Set from --no-art. Off means a flat list of "Label: value" lines with no panels and
+# no logo, which is what anything parsing this output wants.
 DF_ART=1
+
+# Set from --logo / --no-logo. A name selects a specific logo regardless of the distro.
+DF_LOGO=auto
 
 # Half-width katakana is what the film used, and half-width matters: every glyph has to
 # occupy exactly one cell or the columns shear.
@@ -36,28 +47,14 @@ readonly DF_GLYPHS_ASCII='0123456789<>[]{}/\|=+*-_:;.$#%&@'
 DF_GLYPHS="$DF_GLYPHS_ASCII"
 DF_GLYPH_N=${#DF_GLYPHS_ASCII}
 
-# Rendered by scripts/banner.sh rather than counted by hand; every row is 54 columns.
-DF_BANNER=(
-  '███  ████ ████ ████ ███  ████ ████ ████ ████ ████ █  █'
-  '█  █  ██  █     ██  █  █ █  █ █    █     ██  █    █  █'
-  '█  █  ██  ████  ██  ███  █  █ ███  ███   ██  █    ████'
-  '█  █  ██     █  ██  █ █  █  █ █    █     ██  █    █  █'
-  '███  ████ ████  ██  █  █ ████ █    ████  ██  ████ █  █'
-)
-readonly DF_BANNER
-# A constant, not ${#DF_BANNER[0]} — the rows are multibyte and ${#} counts bytes
-# outside a UTF-8 locale, which would throw off every width calculation below.
-readonly DF_BANNER_WIDTH=54
-
-# Field labels and the values behind them, filled by _df_collect. Kept as parallel
-# arrays because the reveal animation redraws the same values many times and probing
-# the machine once per frame would be absurd.
-DF_LABELS=()
-DF_VALUES=()
-
 # Scratch output for the helpers that would otherwise need a subshell. Command
-# substitution forks, and these run inside animation loops.
+# substitution forks, and some of these run inside the animation loop.
 _df_out=""
+
+# Field separator for panel rows. A literal unit separator, because values legitimately
+# contain every printable character — DIMM records are pipe-delimited, paths contain
+# colons, and CPU model strings contain both.
+readonly DF_FS=$'\037'
 
 render_init() {
   local color="$1" art="${2:-1}"
@@ -69,12 +66,15 @@ render_init() {
     DF_BOLD=$'\033[1m'
     DF_RESET=$'\033[0m'
     DF_HEAD=$'\033[1;38;5;231m'
+    DF_WARN=$'\033[38;5;214m'
+    DF_ALERT=$'\033[1;38;5;196m'
     DF_SHADES=(
       $'\033[38;5;22m' $'\033[38;5;28m' $'\033[38;5;34m'
       $'\033[38;5;40m' $'\033[38;5;46m'
     )
   else
     DF_DIM="" DF_GREEN="" DF_BRIGHT="" DF_BOLD="" DF_RESET="" DF_HEAD=""
+    DF_WARN="" DF_ALERT=""
     DF_SHADES=("" "" "" "" "")
   fi
 
@@ -146,8 +146,8 @@ render_rain() {
   done
 
   # The alternate screen buffer means the animation never touches the user's
-  # scrollback: the terminal comes back exactly as it was, and the report then prints
-  # into the normal buffer where it stays.
+  # scrollback: the terminal comes back exactly as it was, and the dashboard then
+  # prints into the normal buffer where it stays.
   printf '\033[?1049h\033[?25l\033[2J'
   trap 'printf "\033[?25h\033[?1049l\033[0m"; exit 130' INT TERM
 
@@ -213,32 +213,8 @@ _df_erase() {
 }
 
 # ---------------------------------------------------------------------------
-# The report
+# Small string helpers
 # ---------------------------------------------------------------------------
-
-# Probe once. Everything downstream reads these arrays.
-_df_collect() {
-  DF_LABELS=('OS:' 'Kernel:' 'Arch:' 'Uptime:' 'Packages:' 'Shell:' 'CPU:' 'Memory:')
-  DF_VALUES=(
-    "$(detect_os)" "$(detect_kernel)" "$(detect_arch)" "$(detect_uptime)"
-    "$(detect_packages)" "$(detect_shell)" "$(detect_cpu)" "$(detect_memory)"
-  )
-}
-
-# `keep` leading characters of src, the rest replaced by random glyphs. Spaces survive
-# so the shape of the value is visible before the value is.
-_df_scramble() {
-  local src="$1" keep="$2" i ch out=""
-  for ((i = 0; i < ${#src}; i++)); do
-    ch="${src:i:1}"
-    if [ "$i" -lt "$keep" ] || [ "$ch" = ' ' ]; then
-      out+="$ch"
-    else
-      out+="${DF_GLYPHS:$((RANDOM % DF_GLYPH_N)):1}"
-    fi
-  done
-  _df_out="$out"
-}
 
 # `n` copies of a single-column character, built by substitution so the count is exact
 # regardless of how many bytes the character takes.
@@ -252,135 +228,544 @@ _df_repeat() {
   _df_out="${_df_out// /$ch}"
 }
 
-# The width of the widest thing that has to fit inside the box.
-_df_inner_width() {
-  local header="$1" i plain w="$DF_BANNER_WIDTH"
-  if [ "${#header}" -gt "$w" ]; then
-    w="${#header}"
+# Truncate to `n` visible columns, marking the cut with an ASCII ellipsis. The marker
+# is "..." rather than U+2026 so that a truncated line stays measurable with ${#} in
+# any locale.
+_df_clip() {
+  local s="$1" n="$2"
+  if [ "$n" -lt 4 ]; then
+    _df_out="${s:0:$n}"
+    return
   fi
-  for i in "${!DF_LABELS[@]}"; do
-    printf -v plain '%-10s %s' "${DF_LABELS[$i]}" "${DF_VALUES[$i]}"
-    if [ "${#plain}" -gt "$w" ]; then
-      w="${#plain}"
-    fi
-  done
-  printf '%s' "$w"
-}
-
-# One boxed line: a left border, `text` padded to `inner` visible columns, a right
-# border. `width` is passed separately because text carries color escapes, and ${#}
-# would count those.
-_df_boxed() {
-  local text="$1" width="$2" inner="$3"
-  local pad=$((inner - width))
-  if [ "$pad" -lt 0 ]; then
-    pad=0
-  fi
-  printf '%s│%s %s%*s %s│%s\n' \
-    "$DF_DIM" "$DF_RESET" "$text" "$pad" '' "$DF_DIM" "$DF_RESET"
-}
-
-_df_banner() {
-  local inner="$1" i indent lead
-  indent=$(((inner - DF_BANNER_WIDTH) / 2))
-  _df_repeat "$indent" ' '
-  lead="$_df_out"
-  for i in "${!DF_BANNER[@]}"; do
-    # The visible width is the indent plus the wordmark, not inner — _df_boxed pads
-    # the remainder, and claiming inner here leaves the right edge short by exactly
-    # the centring offset.
-    _df_boxed "${DF_SHADES[$i]}${lead}${DF_BANNER[$i]}${DF_RESET}" \
-      $((indent + DF_BANNER_WIDTH)) "$inner"
-  done
-}
-
-# The eight field lines, with values revealed up to `keep` characters. A negative keep
-# means no scrambling at all — the final frame, and the only frame in static output.
-_df_fields() {
-  local inner="$1" keep="$2" i value plain colored
-  for i in "${!DF_LABELS[@]}"; do
-    value="${DF_VALUES[$i]}"
-    if [ "$keep" -ge 0 ]; then
-      _df_scramble "$value" "$keep"
-      value="$_df_out"
-    fi
-    # The plain copy exists only to be measured — the colored one is full of escapes
-    # that ${#} would count as visible columns.
-    printf -v plain '%-10s %s' "${DF_LABELS[$i]}" "$value"
-
-    if [ "$DF_ART" -eq 1 ]; then
-      # printf -v rather than $( ): this runs eight times per animation frame, and a
-      # fork per line per frame is the difference between smooth and stuttering.
-      printf -v colored '%s%-10s%s %s%s%s' \
-        "$DF_GREEN" "${DF_LABELS[$i]}" "$DF_RESET" "$DF_BRIGHT" "$value" "$DF_RESET"
-      _df_boxed "$colored" "${#plain}" "$inner"
-    else
-      printf '%s%-10s%s %s%s%s\n' \
-        "$DF_GREEN" "${DF_LABELS[$i]}" "$DF_RESET" "$DF_BRIGHT" "$value" "$DF_RESET"
-    fi
-  done
-}
-
-# animate=1 reveals the values out of noise. Only meaningful on a terminal, since it
-# redraws in place with cursor movement.
-render_report() {
-  local animate="${1:-0}"
-  local header inner rule cols keep longest i
-
-  _df_collect
-  header="${USER:-$(id -un)}@$(detect_host)"
-
-  # Art needs a terminal wide enough for the box. Falling back to the plain report is
-  # better than wrapping every line at 61 columns.
-  inner="$(_df_inner_width "$header")"
-  if [ "$DF_ART" -eq 1 ]; then
-    cols="$(_df_cols)"
-    if [ "$cols" -lt $((inner + 4)) ]; then
-      DF_ART=0
-    fi
-  fi
-
-  if [ "$DF_ART" -eq 1 ]; then
-    _df_repeat $((inner + 2)) '─'
-    rule="$_df_out"
-    printf '%s┌%s┐%s\n' "$DF_DIM" "$rule" "$DF_RESET"
-    if [ "$animate" -eq 1 ]; then
-      # Rows arrive one at a time, so the banner assembles rather than appearing.
-      local -a rows=()
-      mapfile -t rows < <(_df_banner "$inner")
-      for i in "${!rows[@]}"; do
-        printf '%s\n' "${rows[$i]}"
-        sleep 0.06
-      done
-    else
-      _df_banner "$inner"
-    fi
-    _df_boxed "$DF_BOLD$DF_BRIGHT$header$DF_RESET" "${#header}" "$inner"
-    printf '%s├%s┤%s\n' "$DF_DIM" "$rule" "$DF_RESET"
+  if [ "${#s}" -le "$n" ]; then
+    _df_out="$s"
   else
-    printf '%s%s%s@%s%s%s\n' "$DF_BOLD$DF_BRIGHT" "${USER:-$(id -un)}" "$DF_RESET" \
-      "$DF_BOLD$DF_BRIGHT" "$(detect_host)" "$DF_RESET"
-    printf '%s%s%s\n' "$DF_DIM" '────────────────────────────────' "$DF_RESET"
+    _df_out="${s:0:$((n - 3))}..."
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# Panels
+# ---------------------------------------------------------------------------
+#
+# A panel is an array of equal-width lines:
+#
+#   ┌─ PROCESSOR ──────────────────┐
+#   │ Model     13th Gen Intel ... │
+#   └──────────────────────────────┘
+#
+# Rows arrive as key<FS>value<FS>level strings. level is '', 'warn', or 'alert' and
+# only tints the value; the layout never changes with it, so a coloured line and a
+# plain one still occupy the same columns.
+
+# _df_panel OUTVAR TITLE WIDTH KEYW ROW...
+_df_panel() {
+  local -n _panel_out="$1"
+  local title="$2" width="$3" keyw="$4"
+  shift 4
+
+  local inner=$((width - 4))
+  local row key value level plain pad rule title_rule tint
+
+  _panel_out=()
+
+  # ┌─ TITLE ──…──┐ — the fixed part is "┌─ " plus " " plus "┐", five columns, so the
+  # filler is width - 5 - len(title). Getting this off by one shortens only the top
+  # border, which reads as a rendering glitch rather than as arithmetic.
+  _df_repeat $((width - 5 - ${#title})) '─'
+  title_rule="$_df_out"
+  _panel_out+=("${DF_DIM}┌─ ${DF_RESET}${DF_BOLD}${DF_BRIGHT}${title}${DF_RESET}${DF_DIM} ${title_rule}┐${DF_RESET}")
+
+  for row in "$@"; do
+    IFS="$DF_FS" read -r key value level <<<"$row"
+
+    case "$level" in
+      warn) tint="$DF_WARN" ;;
+      alert) tint="$DF_ALERT" ;;
+      *) tint="$DF_BRIGHT" ;;
+    esac
+
+    if [ -z "$key" ]; then
+      # A keyless row spans the full inner width — used for DIMM lines and notes.
+      _df_clip "$value" "$inner"
+      value="$_df_out"
+      plain="$value"
+      pad=$((inner - ${#plain}))
+      [ "$pad" -lt 0 ] && pad=0
+      _panel_out+=("${DF_DIM}│${DF_RESET} ${tint}${value}${DF_RESET}$(printf '%*s' "$pad" '') ${DF_DIM}│${DF_RESET}")
+      continue
+    fi
+
+    _df_clip "$value" $((inner - keyw - 1))
+    value="$_df_out"
+    printf -v plain '%-*s %s' "$keyw" "$key" "$value"
+    pad=$((inner - ${#plain}))
+    [ "$pad" -lt 0 ] && pad=0
+    _panel_out+=("${DF_DIM}│${DF_RESET} ${DF_GREEN}$(printf '%-*s' "$keyw" "$key")${DF_RESET} ${tint}${value}${DF_RESET}$(printf '%*s' "$pad" '') ${DF_DIM}│${DF_RESET}")
+  done
+
+  _df_repeat $((width - 2)) '─'
+  rule="$_df_out"
+  _panel_out+=("${DF_DIM}└${rule}┘${DF_RESET}")
+}
+
+# A blank line of exactly `width` visible columns, for padding a short panel up to the
+# height of a taller neighbour.
+_df_blank_line() {
+  printf -v _df_out '%*s' "$1" ''
+}
+
+# An empty interior row of a panel: borders, nothing between them.
+_df_panel_blank() {
+  local width="$1"
+  _df_blank_line $((width - 4))
+  _df_out="${DF_DIM}│${DF_RESET} ${_df_out} ${DF_DIM}│${DF_RESET}"
+}
+
+# Grow the shorter of two panels with empty interior rows so both close on the same
+# line. Two panels side by side with ragged bottoms read as a rendering fault rather
+# than as one panel simply having less to say.
+_df_equalize() {
+  local a_name="$1" b_name="$2" aw="$3" bw="$4"
+  local -n _a="$a_name"
+  local -n _b="$b_name"
+  local na=${#_a[@]} nb=${#_b[@]}
+
+  if [ "$na" -lt "$nb" ]; then
+    _df_pad_panel "$a_name" "$aw" "$nb"
+  elif [ "$nb" -lt "$na" ]; then
+    _df_pad_panel "$b_name" "$bw" "$na"
+  fi
+}
+
+# Grow one panel to `target` lines by inserting blank interior rows above its footer.
+# Split out rather than rebinding a nameref inside a branch: a second `local -n` on the
+# same name in one scope is a trap, and this path is only exercised by whichever panel
+# happens to be shorter.
+_df_pad_panel() {
+  # shellcheck disable=SC2178  # nameref to an array, not a string assignment
+  local -n _p="$1"
+  local width="$2" target="$3"
+  local n=${#_p[@]}
+
+  if [ "$n" -ge "$target" ] || [ "$n" -lt 2 ]; then
+    return 0
   fi
 
-  if [ "$animate" -eq 1 ]; then
-    longest=0
-    for i in "${!DF_VALUES[@]}"; do
-      if [ "${#DF_VALUES[$i]}" -gt "$longest" ]; then
-        longest="${#DF_VALUES[$i]}"
+  local -a body=("${_p[@]:0:n-1}")
+  local footer="${_p[n - 1]}"
+  _df_panel_blank "$width"
+  while [ "${#body[@]}" -lt $((target - 1)) ]; do
+    body+=("$_df_out")
+  done
+  _p=("${body[@]}" "$footer")
+}
+
+# ---------------------------------------------------------------------------
+# Data collection
+# ---------------------------------------------------------------------------
+
+DF_D_ID=""
+DF_D_VERSION=""
+DF_LOGO_LINES=()
+DF_LOGO_WIDTH=0
+
+# Load the logo art. Logos are strictly ASCII so ${#} measures them correctly in any
+# locale — the same reason the frame's width is computed rather than measured.
+_df_load_logo() {
+  local name line
+  DF_LOGO_LINES=()
+  DF_LOGO_WIDTH=0
+
+  case "$DF_LOGO" in
+    none) return 0 ;;
+    auto) name="$(hwdata_logo_name "$DF_D_ID" "$(detect_distro_like)")" ;;
+    *) name="$DF_LOGO" ;;
+  esac
+
+  if [ ! -r "$DISTROFETCH_LOGOS/$name.txt" ]; then
+    # An explicit --logo that does not exist is a usage error the caller already
+    # reported; auto never lands here because hwdata_logo_name falls back to tux.
+    return 0
+  fi
+
+  while IFS= read -r line || [ -n "$line" ]; do
+    DF_LOGO_LINES+=("$line")
+    # Not `[ ... ] && DF_LOGO_WIDTH=...`: that leaves the loop, and so the function,
+    # returning 1 on the last short line, which under set -e kills the caller.
+    if [ "${#line}" -gt "$DF_LOGO_WIDTH" ]; then
+      DF_LOGO_WIDTH="${#line}"
+    fi
+  done <"$DISTROFETCH_LOGOS/$name.txt"
+}
+
+# ---------------------------------------------------------------------------
+# The dashboard
+# ---------------------------------------------------------------------------
+
+render_dashboard() {
+  local cols width logo_w body_w
+  # shellcheck disable=SC2034  # filled through namerefs by the _df_build_* helpers
+  local -a p_system p_distro p_cpu p_mem p_machine
+
+  DF_D_ID="$(detect_distro_id)"
+  DF_D_VERSION="$(detect_distro_version)"
+
+  cols="$(_df_cols)"
+  # Capped because panels stretched across an ultrawide terminal are unreadable: the
+  # eye has to travel the whole line to pair a key with its value.
+  width=$((cols - 2))
+  [ "$width" -gt 130 ] && width=130
+
+  if [ "$width" -lt 56 ]; then
+    # Nothing fits. The flat list is the honest fallback.
+    render_plain
+    return
+  fi
+
+  _df_load_logo
+  logo_w="$DF_LOGO_WIDTH"
+  # One space joins the logo column to the body, so the body gets everything else.
+  # Reserving two here silently loses the rightmost column of every panel.
+  body_w=$((width - logo_w - 1))
+  # Below this the panels are narrower than their own content; drop the art instead.
+  if [ "$body_w" -lt 52 ]; then
+    DF_LOGO_LINES=()
+    logo_w=0
+    body_w="$width"
+  fi
+
+  _df_header "$width"
+
+  # Two panel columns once there is room for both to hold a full value; one otherwise.
+  if [ "$body_w" -ge 108 ]; then
+    # One space between the two columns; the right one absorbs an odd remainder so the
+    # pair always spans exactly body_w.
+    local half=$(((body_w - 1) / 2))
+    local half2=$((body_w - 1 - half))
+    _df_build_system p_system "$half"
+    _df_build_distro p_distro "$half2"
+    _df_build_cpu p_cpu "$half"
+    _df_build_machine p_machine "$half2"
+    # Memory takes the full width: a DIMM line carries locator, size, type, form
+    # factor, both speeds, and a part number, and it is the row people actually came
+    # for. Clipping it to half a screen defeats the panel.
+    _df_build_memory p_mem "$body_w"
+
+    _df_equalize p_system p_distro "$half" "$half2"
+    _df_equalize p_cpu p_machine "$half" "$half2"
+
+    _df_logo_beside p_system p_distro "$logo_w" "$half" "$half2"
+    _df_indent_pair p_cpu p_machine "$logo_w" "$half" "$half2"
+    _df_indent_panel p_mem "$logo_w"
+  else
+    _df_build_system p_system "$body_w"
+    _df_build_distro p_distro "$body_w"
+    _df_build_cpu p_cpu "$body_w"
+    _df_build_memory p_mem "$body_w"
+    _df_build_machine p_machine "$body_w"
+
+    _df_logo_stack p_system "$logo_w" "$body_w"
+    _df_indent_panel p_distro "$logo_w"
+    _df_indent_panel p_cpu "$logo_w"
+    _df_indent_panel p_mem "$logo_w"
+    _df_indent_panel p_machine "$logo_w"
+  fi
+}
+
+# The top bar: wordmark on the left, user@host on the right, one rule under both.
+_df_header() {
+  local width="$1" host user left right pad
+  user="${USER:-$(id -un)}"
+  host="$(detect_host)"
+  left="distrofetch $DISTROFETCH_VERSION"
+  right="$user@$host"
+  pad=$((width - ${#left} - ${#right}))
+  [ "$pad" -lt 1 ] && pad=1
+
+  printf '%s%s%s%*s%s%s%s\n' \
+    "$DF_BOLD$DF_BRIGHT" "$left" "$DF_RESET" "$pad" '' \
+    "$DF_BOLD$DF_BRIGHT" "$right" "$DF_RESET"
+  _df_repeat "$width" '─'
+  printf '%s%s%s\n\n' "$DF_DIM" "$_df_out" "$DF_RESET"
+}
+
+# Print the logo column beside two panels set side by side.
+_df_logo_beside() {
+  local -n _a="$1"
+  local -n _b="$2"
+  local logo_w="$3" aw="$4" bw="$5"
+  local -a joined=()
+  local i n=${#_a[@]} m=${#_b[@]} lline
+
+  [ "$m" -gt "$n" ] && n="$m"
+  for ((i = 0; i < n; i++)); do
+    if [ "$i" -lt "${#_a[@]}" ]; then lline="${_a[$i]}"; else
+      _df_blank_line "$aw"
+      lline="$_df_out"
+    fi
+    if [ "$i" -lt "${#_b[@]}" ]; then
+      joined+=("$lline ${_b[$i]}")
+    else
+      joined+=("$lline")
+    fi
+  done
+  _df_emit_with_logo joined "$logo_w"
+}
+
+# Print the logo column beside one panel.
+_df_logo_stack() {
+  # shellcheck disable=SC2178  # nameref to an array, not a string assignment
+  local -n _p="$1"
+  local logo_w="$2"
+  local -a joined=("${_p[@]}")
+  _df_emit_with_logo joined "$logo_w"
+}
+
+# Zip the logo art into the left margin of an already-composed block of lines. The art
+# is vertically centred against the block when the block is taller.
+_df_emit_with_logo() {
+  local -n _block="$1"
+  local logo_w="$2"
+  local n=${#_block[@]} l=${#DF_LOGO_LINES[@]}
+  local i offset=0 art pad
+
+  if [ "$logo_w" -eq 0 ] || [ "$l" -eq 0 ]; then
+    for ((i = 0; i < n; i++)); do
+      printf '%s\n' "${_block[$i]}"
+    done
+    return
+  fi
+
+  [ "$n" -gt "$l" ] && offset=$(((n - l) / 2))
+  # A logo taller than the block extends the block rather than being cut off.
+  [ "$l" -gt "$n" ] && n="$l"
+
+  for ((i = 0; i < n; i++)); do
+    art=""
+    if [ "$i" -ge "$offset" ] && [ $((i - offset)) -lt "$l" ]; then
+      art="${DF_LOGO_LINES[$((i - offset))]}"
+    fi
+    pad=$((logo_w - ${#art}))
+    [ "$pad" -lt 0 ] && pad=0
+    if [ "$i" -lt "${#_block[@]}" ]; then
+      printf '%s%s%s%*s %s\n' "$DF_GREEN" "$art" "$DF_RESET" "$pad" '' "${_block[$i]}"
+    else
+      printf '%s%s%s\n' "$DF_GREEN" "$art" "$DF_RESET"
+    fi
+  done
+}
+
+# Indent a panel to sit under the logo column.
+_df_indent_panel() {
+  # shellcheck disable=SC2178  # nameref to an array, not a string assignment
+  local -n _p="$1"
+  local indent="$2" line lead
+  # An indent of zero means there is no logo column at all. Printing "$lead $line"
+  # anyway would prepend a space to every line and shift the panel one column right of
+  # the ones drawn without an indent.
+  if [ "$indent" -le 0 ]; then
+    for line in "${_p[@]}"; do
+      printf '%s\n' "$line"
+    done
+    return 0
+  fi
+  _df_blank_line "$indent"
+  lead="$_df_out"
+  for line in "${_p[@]}"; do
+    printf '%s %s\n' "$lead" "$line"
+  done
+}
+
+_df_indent_pair() {
+  local -n _a="$1"
+  local -n _b="$2"
+  local indent="$3" aw="$4"
+  local i n=${#_a[@]} m=${#_b[@]} lline lead sep
+  if [ "$indent" -le 0 ]; then
+    lead=""
+    sep=""
+  else
+    _df_blank_line "$indent"
+    lead="$_df_out"
+    sep=" "
+  fi
+
+  [ "$m" -gt "$n" ] && n="$m"
+  for ((i = 0; i < n; i++)); do
+    if [ "$i" -lt "${#_a[@]}" ]; then lline="${_a[$i]}"; else
+      _df_blank_line "$aw"
+      lline="$_df_out"
+    fi
+    if [ "$i" -lt "${#_b[@]}" ]; then
+      printf '%s%s%s %s\n' "$lead" "$sep" "$lline" "${_b[$i]}"
+    else
+      printf '%s%s%s\n' "$lead" "$sep" "$lline"
+    fi
+  done
+}
+
+# --- individual panels -----------------------------------------------------
+
+_df_build_system() {
+  local -n _out="$1"
+  local w="$2"
+  _df_panel _out SYSTEM "$w" 9 \
+    "OS${DF_FS}$(detect_os)" \
+    "Kernel${DF_FS}$(detect_kernel)" \
+    "Arch${DF_FS}$(detect_arch)" \
+    "Uptime${DF_FS}$(detect_uptime)" \
+    "Shell${DF_FS}$(detect_shell)" \
+    "Packages${DF_FS}$(detect_packages)"
+}
+
+_df_build_distro() {
+  local -n _out="$1"
+  local w="$2"
+  local released support level codename version
+  released="$(hwdata_distro_released "$DF_D_ID" "$DF_D_VERSION")"
+  support="$(hwdata_distro_support "$DF_D_ID" "$DF_D_VERSION")"
+  level="$(hwdata_distro_support_level "$DF_D_ID" "$DF_D_VERSION")"
+  codename="$(hwdata_distro_codename "$DF_D_ID" "$DF_D_VERSION")"
+  version="$DF_D_VERSION"
+
+  case "$level" in
+    dead) level=alert ;;
+    warn) level=warn ;;
+    *) level="" ;;
+  esac
+
+  _df_panel _out DISTRIBUTION "$w" 9 \
+    "ID${DF_FS}$DF_D_ID" \
+    "Version${DF_FS}${version:-rolling}" \
+    "Codename${DF_FS}${codename:-none}" \
+    "Released${DF_FS}${released:-unknown}" \
+    "Support${DF_FS}${support:-unknown}${DF_FS}$level"
+}
+
+_df_build_cpu() {
+  local -n _out="$1"
+  local w="$2"
+  local arch_row arch launched process microline
+
+  arch_row="$(hwdata_cpu_arch "$(detect_cpu_vendor_id)" \
+    "$(detect_cpu_family)" "$(detect_cpu_model_id)")"
+  IFS='|' read -r arch launched process <<<"$arch_row"
+
+  if [ -n "$arch" ]; then
+    microline="$arch"
+    [ -n "$launched" ] && microline="$microline, launched $launched"
+    [ -n "$process" ] && microline="$microline, $process"
+  else
+    # No table row. Saying nothing is correct; inventing a codename is not.
+    microline="not in the bundled table"
+  fi
+
+  _df_panel _out PROCESSOR "$w" 10 \
+    "Model${DF_FS}$(detect_cpu)" \
+    "Vendor${DF_FS}$(detect_cpu_vendor)" \
+    "Micro-arch${DF_FS}$microline" \
+    "Signature${DF_FS}$(detect_cpu_signature)" \
+    "Topology${DF_FS}$(detect_cpu_topology)" \
+    "Clock${DF_FS}$(detect_cpu_freq)" \
+    "Cache${DF_FS}$(detect_cpu_cache)" \
+    "Features${DF_FS}$(detect_cpu_features)"
+}
+
+_df_build_memory() {
+  local -n _out="$1"
+  local w="$2"
+  local -a rows=()
+  local line locator size type ff speed cfg maker size_gib slots populated=0
+
+  rows+=("RAM${DF_FS}$(detect_memory)")
+  rows+=("Swap${DF_FS}$(detect_swap)")
+
+  if dmi_raw_readable; then
+    slots="$(dmi_slot_count)"
+    while IFS='|' read -r locator size type ff speed cfg maker; do
+      [ -n "$locator" ] || continue
+      populated=$((populated + 1))
+      size_gib=$((size / 1024))
+      if [ "$size_gib" -ge 1 ]; then
+        size="${size_gib} GiB"
+      else
+        size="${size} MiB"
       fi
-    done
-    for ((keep = 0; keep < longest; keep += 2)); do
-      _df_fields "$inner" "$keep"
-      # Back to the top of the block for the next frame.
-      printf '\033[%sA' "${#DF_LABELS[@]}"
-      sleep 0.03
-    done
+      # Rated and configured speed differ whenever XMP/EXPO is off, which is the
+      # single most useful thing this panel can tell someone.
+      if [ "$cfg" -gt 0 ] && [ "$speed" -gt 0 ] && [ "$cfg" -ne "$speed" ]; then
+        speed="${cfg} MT/s (rated ${speed})"
+      elif [ "$cfg" -gt 0 ]; then
+        speed="${cfg} MT/s"
+      else
+        speed="speed unknown"
+      fi
+      rows+=("${DF_FS}${locator}: ${size} ${type:+$type }${ff:+$ff }@ ${speed}${maker:+ - $maker}")
+    done < <(dmi_dimms)
+    rows+=("Slots${DF_FS}${populated} of ${slots} populated")
+  else
+    rows+=("Modules${DF_FS}$(dmi_raw_reason)${DF_FS}warn")
   fi
 
-  _df_fields "$inner" -1
+  _df_panel _out MEMORY "$w" 9 "${rows[@]}"
+}
 
+_df_build_machine() {
+  local -n _out="$1"
+  local w="$2"
+  _df_panel _out MACHINE "$w" 9 \
+    "Model${DF_FS}$(detect_machine)" \
+    "Board${DF_FS}$(detect_board)" \
+    "Firmware${DF_FS}$(detect_bios)"
+}
+
+# ---------------------------------------------------------------------------
+# The plain report
+# ---------------------------------------------------------------------------
+
+# --no-art, and the fallback for a terminal too narrow for panels. One fact per line,
+# no frame, no logo: greppable, diffable, and stable for anything parsing it.
+render_plain() {
+  local support
+
+  printf '%s%s%s@%s%s%s\n' "$DF_BOLD$DF_BRIGHT" "${USER:-$(id -un)}" "$DF_RESET" \
+    "$DF_BOLD$DF_BRIGHT" "$(detect_host)" "$DF_RESET"
+  printf '%s%s%s\n' "$DF_DIM" '────────────────────────────────' "$DF_RESET"
+
+  DF_D_ID="${DF_D_ID:-$(detect_distro_id)}"
+  DF_D_VERSION="${DF_D_VERSION:-$(detect_distro_version)}"
+  support="$(hwdata_distro_support "$DF_D_ID" "$DF_D_VERSION")"
+
+  _df_plain_field 'OS:' "$(detect_os)"
+  _df_plain_field 'Kernel:' "$(detect_kernel)"
+  _df_plain_field 'Arch:' "$(detect_arch)"
+  _df_plain_field 'Uptime:' "$(detect_uptime)"
+  _df_plain_field 'Packages:' "$(detect_packages)"
+  _df_plain_field 'Shell:' "$(detect_shell)"
+  _df_plain_field 'Released:' "$(hwdata_distro_released "$DF_D_ID" "$DF_D_VERSION")"
+  _df_plain_field 'Support:' "$support"
+  _df_plain_field 'CPU:' "$(detect_cpu)"
+  _df_plain_field 'Cores:' "$(detect_cpu_topology)"
+  _df_plain_field 'Clock:' "$(detect_cpu_freq)"
+  _df_plain_field 'Cache:' "$(detect_cpu_cache)"
+  _df_plain_field 'Memory:' "$(detect_memory)"
+  _df_plain_field 'Swap:' "$(detect_swap)"
+  _df_plain_field 'Machine:' "$(detect_machine)"
+  _df_plain_field 'Firmware:' "$(detect_bios)"
+}
+
+_df_plain_field() {
+  local value="$2"
+  [ -n "$value" ] || value="unknown"
+  printf '%s%-10s%s %s%s%s\n' "$DF_GREEN" "$1" "$DF_RESET" "$DF_BRIGHT" "$value" "$DF_RESET"
+}
+
+# Entry point from bin/distrofetch.
+render_report() {
   if [ "$DF_ART" -eq 1 ]; then
-    printf '%s└%s┘%s\n' "$DF_DIM" "$rule" "$DF_RESET"
+    render_dashboard
+  else
+    render_plain
   fi
 }

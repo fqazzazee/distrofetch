@@ -31,10 +31,19 @@ elif [ -d "$_bindir/../lib" ]; then
 else
   die "cannot locate library directory relative to $_bindir"
 fi
-readonly DISTROFETCH_LIB DISTROFETCH_VERSION
 
+# The reference tables and the logo art sit beside the shell libraries, so both
+# layouts resolve from the same base.
+DISTROFETCH_DATA="$DISTROFETCH_LIB/data"
+DISTROFETCH_LOGOS="$DISTROFETCH_LIB/logos"
+readonly DISTROFETCH_LIB DISTROFETCH_DATA DISTROFETCH_LOGOS DISTROFETCH_VERSION
+
+# shellcheck source=../lib/dmi.sh
+. "$DISTROFETCH_LIB/dmi.sh"
 # shellcheck source=../lib/detect.sh
 . "$DISTROFETCH_LIB/detect.sh"
+# shellcheck source=../lib/hwdata.sh
+. "$DISTROFETCH_LIB/hwdata.sh"
 # shellcheck source=../lib/render.sh
 . "$DISTROFETCH_LIB/render.sh"
 
@@ -45,25 +54,41 @@ distrofetch $DISTROFETCH_VERSION — matrix-styled system information
 Usage: distrofetch [options]
 
 Options:
-  -d, --duration N   seconds of rain before the report settles (default: 0)
+      --logo=NAME    force a distro logo (see --list-logos)
+      --no-logo      dashboard without the logo column
+      --no-art       plain label/value lines: no panels, no logo
+      --list-logos   print the bundled logo names and exit
+  -d, --duration N   seconds of rain before the dashboard (default: 0)
   -n, --no-rain      skip the animation; the default, kept for explicitness
-      --no-art       plain label/value lines: no banner, no box
       --color=WHEN   always, never, or auto (default: auto)
   -c, --no-color     alias for --color=never
   -v, --version      print version and exit
   -h, --help         print this help and exit
 
-The banner and the box print every time and cost nothing. They drop out
-automatically when the terminal is too narrow for them, and --no-art turns
-them off for good — use it when something is reading this output.
+The dashboard prints immediately and costs no wall-clock time. It lays out
+five panels — system, distribution, processor, memory, machine — beside the
+logo of the running distro, in two columns when the terminal is wide enough
+and one when it is not. Below 56 columns it falls back to the plain list.
+
+--no-art gives that plain list directly. Use it when something is reading
+this output: it is one fact per line, no frame, no logo.
+
+Memory module manufacturer, type, and speed come from the raw SMBIOS tables,
+which the kernel exposes at mode 0400. Unprivileged runs say so rather than
+printing "unknown"; run "sudo distrofetch" to see them. Nothing else here
+needs privilege, and distrofetch never asks for it.
+
+Release dates and end-of-support dates come from SUPPORT_END= in
+/etc/os-release where the distro ships it, and from a bundled table
+otherwise. A release the table does not know prints "unknown" rather than
+a guess.
 
 The animation is off by default — this runs in shell startup files, where two
 seconds is a long time to wait. Turn it on with -d:
 
   distrofetch -d 2
 
-That rains glyphs on the alternate screen, so your scrollback survives, then
-the report assembles and its values resolve out of the noise.
+That rains glyphs on the alternate screen, so your scrollback survives.
 
 Color defaults to auto: on for a terminal, off for a pipe or a file, so
 redirected output is plain text. Force it when the consumer understands ANSI:
@@ -77,15 +102,35 @@ Exit status: 0 on success, 2 on a usage error.
 EOF
 }
 
+list_logos() {
+  local f
+  for f in "$DISTROFETCH_LOGOS"/*.txt; do
+    [ -r "$f" ] || continue
+    f="${f##*/}"
+    printf '%s\n' "${f%.txt}"
+  done
+}
+
 main() {
   # Rain is opt-in: a duration of 0 means no animation at all.
   # Color is resolved after parsing, since auto depends on the TTY check below.
-  local rain=1 color=1 duration=0 color_mode=auto art=1
+  local rain=1 color=1 duration=0 color_mode=auto art=1 logo=auto
 
   while [ $# -gt 0 ]; do
     case "$1" in
       -n | --no-rain) rain=0 ;;
       --no-art) art=0 ;;
+      --no-logo) logo=none ;;
+      --logo=*) logo="${1#--logo=}" ;;
+      --logo)
+        [ $# -ge 2 ] || die "--logo needs a name; --list-logos prints them"
+        logo="$2"
+        shift
+        ;;
+      --list-logos)
+        list_logos
+        return 0
+        ;;
       --color=*) color_mode="${1#--color=}" ;;
       --color)
         [ $# -ge 2 ] || die "--color needs a value: always, never, or auto"
@@ -141,13 +186,23 @@ main() {
     *) die "--color must be always, never, or auto (got: $color_mode)" ;;
   esac
 
+  # Validate the logo before any output, so a typo fails immediately rather than
+  # after half a dashboard has scrolled past.
+  case "$logo" in
+    auto | none) ;;
+    */* | '') die "--logo takes a name, not a path; --list-logos prints them" ;;
+    *)
+      [ -r "$DISTROFETCH_LOGOS/$logo.txt" ] \
+        || die "no such logo: $logo (--list-logos prints them)"
+      ;;
+  esac
+
   render_init "$color" "$art"
+  DF_LOGO="$logo"
   if [ "$rain" -eq 1 ]; then
     render_rain "$duration"
   fi
-  # The reveal is the second half of the animation, so it runs exactly when the rain
-  # did. It redraws in place, which needs the same terminal the rain needed.
-  render_report "$rain"
+  render_report
 }
 
 main "$@"
