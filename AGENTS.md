@@ -77,6 +77,14 @@ the same make target you just ran.
 - `cmd | grep -m1 ...` fails under `set -o pipefail`. grep exits at the first match, the
   writer takes SIGPIPE, and the pipeline reports failure on success. Use a single tool
   that stops on its own, such as `sed ... {p;q}`.
+- `declare -A` is **local** when the declaring statement runs inside a function, and the
+  tests source these libraries from bats' `setup()`. Use `declare -gA`, or the array
+  vanishes and the next assignment creates an indexed one whose subscript is evaluated
+  as arithmetic.
+- The dashboard is built several times per run at decreasing detail. Anything a builder
+  depends on must be cached before the loop, and a panel's **width cannot be chosen
+  before the drop pass** — dropping an empty panel shifts every later one across the
+  pairing.
 - **git cannot store an empty directory.** A fixture tree that relies on one works
   locally and arrives broken in CI: the symlinks survive, the directories they point at
   do not. Every fixture directory needs a file in it, and nothing may depend on a

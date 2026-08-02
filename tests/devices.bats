@@ -14,7 +14,8 @@ setup() {
   DF_SYS_NET="$ROOT/net"
   DF_SYS_USB="$ROOT/usb"
   DF_SYS_TBT="$ROOT/thunderbolt"
-  export DF_SYS_PCI DF_SYS_NET DF_SYS_USB DF_SYS_TBT
+  DF_SYS_BLOCK="$ROOT/block"
+  export DF_SYS_PCI DF_SYS_NET DF_SYS_USB DF_SYS_TBT DF_SYS_BLOCK
   # shellcheck source=../lib/devices.sh
   . "$BATS_TEST_DIRNAME/../lib/devices.sh"
 }
@@ -137,6 +138,135 @@ setup() {
   [ -z "$output" ]
   run dev_speed_human 'not-a-number'
   [ -z "$output" ]
+}
+
+# --- storage ---------------------------------------------------------------
+
+@test "whole disks are enumerated and pseudo-devices are not" {
+  run detect_disks
+  [ "$status" -eq 0 ]
+  [ "${#lines[@]}" -eq 4 ]
+  for junk in loop0 loop7 ram0 zram0 dm-0 sr0; do
+    [[ "$output" != *"$junk"* ]]
+  done
+}
+
+@test "rotational distinguishes an SSD from a spinning disk" {
+  run detect_disks
+  # sda is rotational=0, sdb is rotational=1.
+  [[ "${lines[2]}" == 'sda|500118192|0|'* ]]
+  [[ "${lines[3]}" == 'sdb|7814037168|1|'* ]]
+}
+
+@test "the padded model field is trimmed" {
+  run detect_disks
+  [[ "${lines[0]}" == *'|WD PC SN560 SDDPNQE-1T00-1102|nvme|'* ]]
+  [[ "$output" != *'  |'* ]]
+}
+
+@test "an NVMe drive reports its PCIe link" {
+  run detect_disks
+  [[ "${lines[0]}" == *'|PCIe 4.0 x4' ]]
+}
+
+# A Gen4 drive in a Gen3 slot runs at half speed and nothing else on the system says
+# so, which is the whole reason both numbers are reported.
+@test "a link running below its maximum reports both" {
+  run detect_disks
+  [[ "${lines[1]}" == *'|PCIe 3.0 x2 (max 4.0 x4)' ]]
+}
+
+@test "a SATA disk has no PCIe link to report" {
+  run detect_disks
+  [[ "${lines[2]}" == *'|sata|' ]]
+}
+
+# The output is designed to be screenshotted, and a drive serial is a durable
+# identifier. The fixtures carry one so this can be proven.
+@test "disk serial numbers never appear" {
+  run detect_disks
+  [[ "$output" != *SERIAL-DO-NOT-PRINT* ]]
+}
+
+@test "PCIe generations map from the negotiated transfer rate" {
+  run pcie_gen_from_speed '2.5 GT/s PCIe'
+  [ "$output" = '1.0' ]
+  run pcie_gen_from_speed '8.0 GT/s PCIe'
+  [ "$output" = '3.0' ]
+  run pcie_gen_from_speed '16.0 GT/s PCIe'
+  [ "$output" = '4.0' ]
+  run pcie_gen_from_speed '32.0 GT/s PCIe'
+  [ "$output" = '5.0' ]
+  run pcie_gen_from_speed 'Unknown'
+  [ -z "$output" ]
+}
+
+# Manufacturers sell drives in decimal units. 2000409264 sectors is 1.02 TB decimal and
+# 953 GiB binary; the number someone can match against the label is the useful one.
+@test "capacity is reported in the units printed on the drive" {
+  run disk_size_human 2000409264
+  [ "$output" = '1.0 TB' ]
+  run disk_size_human 500118192
+  [ "$output" = '256 GB' ]
+  run disk_size_human 0
+  [ -z "$output" ]
+  run disk_size_human 'not-a-number'
+  [ -z "$output" ]
+}
+
+# --- link classification ---------------------------------------------------
+
+# pci.ids names discrete wireless parts with their generation, which is the only
+# unprivileged source: sysfs has no capability attributes and ethtool needs privilege.
+@test "Wi-Fi generation is read from the device name" {
+  run wifi_generation 'Wi-Fi 7(802.11be) AX1775*/BE401 2x2'
+  [[ "$output" == 'Wi-Fi 7'* ]]
+  run wifi_generation 'Wi-Fi 6E(802.11ax) AX210/AX1675* 2x2 [Typhoon Peak]'
+  [[ "$output" == 'Wi-Fi 6E'* ]]
+  run wifi_generation 'Wi-Fi 6 AX200'
+  [[ "$output" == 'Wi-Fi 6 '* ]]
+  run wifi_generation 'Wi-Fi 5(802.11ac) Wireless-AC 9x6x'
+  [[ "$output" == 'Wi-Fi 5'* ]]
+}
+
+@test "a name with no generation marker yields nothing" {
+  run wifi_generation 'Wireless 8265 / 8275'
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+# CNVi splits the wireless MAC (in the PCH, which the PCI ID names) from the RF module
+# that actually sets the generation. Two machines with this ID can differ, so there is
+# no answer to give and the panel says why rather than guessing.
+@test "CNVi parts are identified as unanswerable rather than guessed" {
+  run wifi_is_cnvi 'Raptor Lake PCH CNVi WiFi'
+  [ "$status" -eq 0 ]
+  run wifi_is_cnvi 'Wi-Fi 6 AX200'
+  [ "$status" -ne 0 ]
+  run wifi_generation 'Raptor Lake PCH CNVi WiFi'
+  [ -z "$output" ]
+}
+
+@test "ethernet rated speed is read from the device name" {
+  run ethernet_rated_speed '82574L Gigabit Network Connection'
+  [ "$output" = '1 Gbps' ]
+  run ethernet_rated_speed 'Ethernet Controller X550'
+  [ "$output" = '10 Gbps' ]
+  run ethernet_rated_speed 'FastLinQ QL45000 Series 25GbE Controller'
+  [ "$output" = '25 Gbps' ]
+  run ethernet_rated_speed 'Some Unlabelled NIC'
+  [ -z "$output" ]
+}
+
+# *5GbE* also matches "2.5GbE", so pattern order decides whether a 2.5 GbE card is
+# reported at twice its speed.
+@test "2.5GbE is not mistaken for 5GbE" {
+  run ethernet_rated_speed 'Ethernet Controller I225-V'
+  [ "$output" = '2.5 Gbps' ]
+  run ethernet_rated_speed '2.5GbE Controller'
+  [ "$output" = '2.5 Gbps' ]
+  run ethernet_rated_speed 'AQC111 5GbE'
+  [ "$output" = '5 Gbps' ]
 }
 
 # --- Thunderbolt -----------------------------------------------------------

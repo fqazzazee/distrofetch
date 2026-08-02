@@ -8,6 +8,63 @@ decision, it is a preference.
 
 ---
 
+## 2026-08-02 — The dashboard fits the terminal by dropping detail, not by resizing type
+
+**Status:** accepted
+
+**Context:** The request was to clear the screen and fit everything in the terminal so
+the result is screenshot-ready, "if that means using different font sizes and smaller
+font for details do that".
+
+**Decision:** Clear the screen, measure the terminal, and rebuild the dashboard at
+decreasing detail until it fits: full, compact, minimal, then the same three with panels
+paired two across, then without the logo. Panels whose every row is a "none present"
+answer are dropped at the tightest densities. Type size is not touched.
+
+**Alternatives:** `DECDWL` and `DECDHL`, the VT100 double-width and double-height line
+controls — rejected on capability and on cost. kitty, alacritty, and most modern
+emulators do not implement them; where they do, a double-width line halves the columns
+available on that line, which breaks every alignment guarantee in the layout engine.
+There is no terminal control for a *smaller* font at all, so the "smaller font for
+details" half of the idea has no mechanism even in principle. Rendering to an image or
+to HTML would give real type control and was not built: it is a different output target
+and a much larger project than was asked for.
+
+**Consequences:** Hierarchy comes from the palette and from what gets dropped rather
+than from type size. The dashboard is now built up to six times per run — cheap, because
+every probe and sysfs walk is cached and only row formatting is redone, but it does mean
+a panel's *width* cannot be decided until after the drop pass, which was a real bug
+before it was a rule. Below roughly 26 lines the layout overflows rather than hiding the
+machine's identity, and that is deliberate.
+
+---
+
+## 2026-08-02 — Wi-Fi generation is read off a label, and CNVi is reported as unknowable
+
+**Status:** accepted
+
+**Context:** The request asked for the Wi-Fi version — 6E, 7. Nothing unprivileged
+exposes it: `/sys/class/ieee80211/phy0/` carries no capability attributes, and ethtool's
+link-settings ioctl returns `EPERM` to an ordinary user. What exists is the device name
+from pci.ids, which for discrete parts states the generation outright.
+
+**Decision:** Parse the generation out of the device name. Where the name does not carry
+one and the part is Intel CNVi, report that the generation is set by the RF module and
+not by the PCI ID. Otherwise say nothing.
+
+**Alternatives:** Shelling out to `iw phy info` — rejected as a runtime dependency, and
+it is absent from every container in the smoke matrix. A bundled PCI-ID-to-generation
+table — rejected for CNVi specifically, and CNVi is most laptops: the PCI ID identifies
+the MAC in the chipset, while the radio is a separate M.2 module, so the *same ID* is
+Wi-Fi 6 on one machine and Wi-Fi 6E on another. A table would be confidently wrong on
+the most common hardware.
+
+**Consequences:** This is a label, not a measurement, and the code says so. The answer
+is absent on the developer's own laptop, which is the correct answer there and a good
+demonstration of the rule that a gap beats a guess.
+
+---
+
 ## 2026-08-02 — Graphics, network, USB, and Thunderbolt, reversing part of a non-goal
 
 **Status:** accepted — supersedes the GPU half of the "GPU, disk, theme, icon, or WM/DE

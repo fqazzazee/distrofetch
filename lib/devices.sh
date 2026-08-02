@@ -25,6 +25,7 @@
 : "${DF_SYS_NET:=/sys/class/net}"
 : "${DF_SYS_USB:=/sys/bus/usb/devices}"
 : "${DF_SYS_TBT:=/sys/bus/thunderbolt/devices}"
+: "${DF_SYS_BLOCK:=/sys/block}"
 
 # Contents of a sysfs attribute with the trailing newline stripped, or nothing. sysfs
 # reads can fail with EINVAL or ENODEV on a device that is asleep or being removed, so
@@ -189,6 +190,187 @@ dev_speed_human() {
         printf '%s Mbps' "$mbps"
       fi
       ;;
+  esac
+}
+
+# --- PCIe links ------------------------------------------------------------
+
+# PCIe generation from the link speed sysfs reports, which is a transfer rate string
+# like "16.0 GT/s PCIe". The rate is what the hardware negotiates; the generation is
+# what the rate is called, and is the number on the box.
+pcie_gen_from_speed() {
+  local speed="${1%% *}"
+  case "$speed" in
+    2.5) printf '1.0' ;;
+    5.0 | 5) printf '2.0' ;;
+    8.0 | 8) printf '3.0' ;;
+    16.0 | 16) printf '4.0' ;;
+    32.0 | 32) printf '5.0' ;;
+    64.0 | 64) printf '6.0' ;;
+    *) return 0 ;;
+  esac
+}
+
+# "PCIe 4.0 x4", or "PCIe 4.0 x4 (of 4.0 x4)" when the device is running below what it
+# and the slot are both capable of — an NVMe drive in the wrong slot is a common and
+# invisible performance problem, and the two numbers side by side are what reveal it.
+#
+# Reads the standard PCI link attributes, so this works for any PCI device: the NVMe
+# controller behind a namespace, a network card, a GPU.
+pcie_link() {
+  local dir="$1" cur_speed max_speed cur_width max_width cur_gen max_gen out=""
+  cur_speed="$(_dev_read "$dir/current_link_speed")"
+  max_speed="$(_dev_read "$dir/max_link_speed")"
+  cur_width="$(_dev_read "$dir/current_link_width")"
+  max_width="$(_dev_read "$dir/max_link_width")"
+
+  cur_gen="$(pcie_gen_from_speed "$cur_speed")"
+  max_gen="$(pcie_gen_from_speed "$max_speed")"
+  [ -n "$cur_gen" ] || return 0
+
+  out="PCIe $cur_gen"
+  case "$cur_width" in
+    '' | 0 | *[!0-9]*) ;;
+    *) out="$out x$cur_width" ;;
+  esac
+
+  # Only mention the maximum when it differs, so the common case stays short.
+  if [ -n "$max_gen" ] && { [ "$max_gen" != "$cur_gen" ] || [ "$max_width" != "$cur_width" ]; }; then
+    case "$max_width" in
+      '' | 0 | 255 | *[!0-9]*) out="$out (max $max_gen)" ;;
+      *) out="$out (max $max_gen x$max_width)" ;;
+    esac
+  fi
+  printf '%s' "$out"
+}
+
+# --- storage ---------------------------------------------------------------
+
+# One line per whole disk:  name|size_sectors|rotational|model|transport|pcie
+#
+# Only real disks. loop, ram, zram, device-mapper, and optical devices are skipped:
+# they are either not hardware or not something with a capacity worth reporting, and a
+# machine with twenty snap mounts would otherwise print twenty loop devices.
+#
+# The serial number at device/serial is never read, for the same reason a DIMM serial
+# is not: it is a durable identifier and this output is designed to be posted.
+detect_disks() {
+  local b name size rot model transport pcie devdir
+  for b in "$DF_SYS_BLOCK"/*/; do
+    name="${b%/}"
+    name="${name##*/}"
+    case "$name" in
+      loop* | ram* | zram* | dm-* | sr* | md* | fd*) continue ;;
+    esac
+
+    size="$(_dev_read "$b/size")"
+    rot="$(_dev_read "$b/queue/rotational")"
+    model="$(_dev_read "$b/device/model")"
+    # sysfs pads the SCSI model field to a fixed width.
+    model="${model%"${model##*[![:space:]]}"}"
+
+    transport=""
+    pcie=""
+    case "$name" in
+      nvme*)
+        transport=nvme
+        # /sys/block/nvme0n1/device is the controller; its own device is the PCI
+        # function that carries the link attributes.
+        devdir="$b/device/device"
+        [ -d "$devdir" ] && pcie="$(pcie_link "$devdir")"
+        [ -n "$model" ] || model="$(_dev_read "$b/device/model")"
+        ;;
+      mmcblk*) transport=mmc ;;
+      *)
+        if [ -e "$b/device" ]; then
+          transport=sata
+        fi
+        ;;
+    esac
+
+    printf '%s|%s|%s|%s|%s|%s\n' \
+      "$name" "$size" "$rot" "$model" "$transport" "$pcie"
+  done
+}
+
+# 512-byte sectors as the capacity printed on the drive. Decimal units, deliberately:
+# a "1 TB" drive is 1000 GB to its manufacturer and 931 GiB to the kernel, and the
+# number someone can match against the label is the useful one.
+disk_size_human() {
+  local sectors="$1" bytes
+  case "$sectors" in
+    '' | 0 | *[!0-9]*) return 0 ;;
+  esac
+  bytes=$((sectors * 512))
+  if [ "$bytes" -ge 1000000000000 ]; then
+    printf '%s.%s TB' $((bytes / 1000000000000)) $(((bytes % 1000000000000) / 100000000000))
+  elif [ "$bytes" -ge 1000000000 ]; then
+    printf '%s GB' $((bytes / 1000000000))
+  else
+    printf '%s MB' $((bytes / 1000000))
+  fi
+}
+
+# --- link classification from device names ---------------------------------
+#
+# Neither of these facts is in sysfs, and the tools that would report them need
+# privilege: ethtool's link-settings ioctl returns EPERM to an unprivileged caller, and
+# `iw phy info` is a separate dependency. What *is* available is the device name from
+# pci.ids, which frequently carries the answer, because vendors put it there.
+#
+# So these read a label rather than measuring anything, and say nothing when the label
+# says nothing. A blank is a gap; a guessed Wi-Fi generation is a wrong fact about
+# someone's hardware.
+
+# "Wi-Fi 7", "Wi-Fi 6E", "Wi-Fi 6", "Wi-Fi 5", or nothing.
+#
+# pci.ids names discrete parts with the generation — "Wi-Fi 6E(802.11ax) AX210",
+# "MT7925 (RZ717) Wi-Fi 7 160MHz" — so matching the marketing name covers them. The
+# 802.11 revision is the fallback for names that carry it instead.
+wifi_generation() {
+  local name="$1"
+  case "$name" in
+    *'Wi-Fi 7'* | *'WiFi 7'* | *802.11be*) printf 'Wi-Fi 7 (802.11be)' ;;
+    *'Wi-Fi 6E'* | *'WiFi 6E'*) printf 'Wi-Fi 6E (802.11ax, 6 GHz)' ;;
+    *'Wi-Fi 6'* | *'WiFi 6'* | *802.11ax*) printf 'Wi-Fi 6 (802.11ax)' ;;
+    *'Wi-Fi 5'* | *'WiFi 5'* | *802.11ac*) printf 'Wi-Fi 5 (802.11ac)' ;;
+    *'Wi-Fi 4'* | *802.11n*) printf 'Wi-Fi 4 (802.11n)' ;;
+    *) return 0 ;;
+  esac
+}
+
+# Whether this is an Intel CNVi part, where the generation is genuinely not knowable
+# from the PCI ID.
+#
+# CNVi splits the wireless MAC — which lives in the PCH and is what the PCI ID names —
+# from the RF module, a separate M.2 part that is what actually determines whether the
+# link is Wi-Fi 6 or 6E. Two machines reporting the same PCI ID can have different
+# wireless generations. Reporting a generation here would be a guess, so instead the
+# panel explains why there is not one.
+wifi_is_cnvi() {
+  case "$1" in
+    *CNVi* | *cnvi*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# The rated line speed a wired NIC's name claims, or nothing. This is the ceiling the
+# hardware is sold as; `speed` in sysfs is what the link actually negotiated, and the
+# gap between them is a cable or a switch port.
+ethernet_rated_speed() {
+  local name="$1"
+  case "$name" in
+    *100GbE* | *100-Gigabit* | *'100 Gigabit'*) printf '100 Gbps' ;;
+    *40GbE* | *40-Gigabit* | *'40 Gigabit'*) printf '40 Gbps' ;;
+    *25GbE* | *25-Gigabit* | *'25 Gigabit'*) printf '25 Gbps' ;;
+    *10GbE* | *10-Gigabit* | *'10 Gigabit'* | *X550* | *X540* | *X520*) printf '10 Gbps' ;;
+    # 2.5 before 5: *5GbE* also matches "2.5GbE", and a 2.5 GbE NIC reported as
+    # 5 Gbps is a wrong fact rather than a missing one.
+    *2.5GbE* | *2.5G* | *'2.5 Gigabit'* | *I225* | *I226*) printf '2.5 Gbps' ;;
+    *5GbE* | *'5 Gigabit'*) printf '5 Gbps' ;;
+    *Gigabit* | *GbE*) printf '1 Gbps' ;;
+    *'Fast Ethernet'* | *100BaseTX*) printf '100 Mbps' ;;
+    *) return 0 ;;
   esac
 }
 

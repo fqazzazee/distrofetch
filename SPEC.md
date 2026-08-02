@@ -121,6 +121,48 @@ fresh install and wants the specs without installing a toolchain first.
     bundled vendor table otherwise, degrading to `[vendor:device]` hex. The database is
     absent from minimal containers, which is where the smoke matrix runs.
 
+### Storage
+
+27. Report every whole disk with capacity, whether it is solid state, its model, and —
+    for NVMe — the PCIe generation and width it negotiated. Skip loop, ram, zram,
+    device-mapper, and optical devices: they are either not hardware or have no capacity
+    worth reporting, and a machine with twenty snap mounts would otherwise print twenty
+    loop devices.
+28. Report both the negotiated and the maximum PCIe link when they differ. A Gen4 drive
+    in a Gen3 slot runs at half its throughput and nothing else on the system says so.
+29. Report capacity in decimal units. A "1 TB" drive is 1000 GB to its manufacturer and
+    931 GiB to the kernel, and the number that matches the label is the useful one.
+30. **Never read a drive serial number**, for the same reason as a DIMM serial.
+
+### Link detail
+
+31. Report a wireless interface's Wi-Fi generation where the device name carries one,
+    and say why there is none where it does not. Neither sysfs nor an unprivileged
+    ethtool exposes this — `ETHTOOL_GLINKSETTINGS` returns `EPERM` to an ordinary user —
+    so the device name from `pci.ids` is the only source, and it is a label rather than
+    a measurement.
+32. Identify Intel CNVi parts as unanswerable rather than guessing. CNVi splits the
+    wireless MAC, which lives in the PCH and is what the PCI ID names, from the RF
+    module that actually sets the generation; two machines reporting the same PCI ID can
+    be Wi-Fi 6 and Wi-Fi 6E.
+33. Report a wired interface's rated speed where its name states one, alongside the
+    negotiated speed. The gap between them is a cable or a switch port, and neither
+    number identifies that alone.
+
+### Fitting the terminal
+
+34. Clear the screen before drawing, on a terminal only, and only once the dashboard is
+    ready — a failed run leaves the screen it found. `--no-clear` disables it.
+35. Measure the terminal and drop detail until the dashboard fits its height. Attempts
+    run in strictly decreasing order of information: full, compact, minimal, then the
+    same three with panels paired two across, then without the logo. The result is
+    always the most complete layout that fits.
+36. Drop a panel whose every row is a "none present" answer at the tightest densities. A
+    panel that costs three lines to say nothing is worse than its absence, and on a
+    container there are three of them.
+37. Never claim to fit what cannot fit. Below roughly 26 lines the dashboard overflows,
+    and that is preferable to hiding the machine's identity.
+
 ### The animation
 
 18. Animate falling glyphs before the dashboard, for a duration the user controls. The
@@ -351,6 +393,16 @@ on every push. <!-- assumed --> arm64 is expected to work but is not tested.
   from sysfs with a fixed shape — a PCI class code, a link speed in Mbit/s, a generation
   integer — and none of it needs a per-vendor branch. Anything requiring per-vendor code
   to *read* is still out.
+- **Per-region font sizes.** Terminals have no portable mechanism for this. `DECDWL`
+  and `DECDHL` (double-width and double-height lines) exist in the VT100 repertoire but
+  are unimplemented in kitty, alacritty, and most modern emulators, and where they do
+  work they halve the columns on that line and break every alignment guarantee above.
+  Visual hierarchy comes from the palette and from dropping detail, not from type size.
+- **Filesystem usage, partitions, and mount points.** Storage reporting stops at the
+  device. What is *on* a disk is a different question from what the disk is, needs
+  `statvfs` per mount, and changes minute to minute.
+- **SMART attributes, drive health, and temperature.** These need privileged ioctls and
+  a per-vendor attribute table, which is the line this project does not cross.
 - **VRAM, GPU clocks, temperatures, and utilisation.** These are where graphics
   reporting turns into a per-driver project: amdgpu exposes them in sysfs, i915 does not,
   and nvidia needs a proprietary tool. The adapter's identity needs none of that.
@@ -385,6 +437,15 @@ on every push. <!-- assumed --> arm64 is expected to work but is not tested.
       no port count is claimed
 - [ ] Device names resolve from `pci.ids` where present and degrade to the bundled
       vendor table and then to hex where it is not
+- [ ] Every whole disk is reported with capacity and kind; loop, zram, and dm devices
+      are not
+- [ ] An NVMe drive negotiated below its maximum reports both figures
+- [ ] No drive serial appears in any output
+- [ ] A Wi-Fi device whose name carries a generation reports it; a CNVi part explains
+      why it cannot
+- [ ] A 2.5 GbE NIC is not reported as 5 GbE
+- [ ] The dashboard fits at 60, 40, and 30 lines, and the screen-clear escape never
+      reaches a pipe
 - [ ] An unprivileged run states why module detail is unavailable rather than printing
       `unknown`
 - [ ] A rolling release reports no end of life; an expired release reports its overrun;

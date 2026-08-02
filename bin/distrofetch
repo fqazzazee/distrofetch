@@ -61,6 +61,7 @@ Options:
       --logo=NAME    force a distro logo (see --list-logos)
       --no-logo      dashboard without the logo column
       --no-art       plain label/value lines: no panels, no logo
+      --no-clear     do not clear the screen before drawing
       --list-logos   print the bundled logo names and exit
   -d, --duration N   seconds of rain before the dashboard (default: 0)
   -n, --no-rain      skip the animation; the default, kept for explicitness
@@ -70,9 +71,14 @@ Options:
   -h, --help         print this help and exit
 
 The dashboard prints immediately and costs no wall-clock time. It lays out
-five panels — system, distribution, processor, memory, machine — beside the
-logo of the running distro, in two columns when the terminal is wide enough
-and one when it is not. Below 56 columns it falls back to the plain list.
+nine panels — system, distribution, processor, memory, storage, graphics,
+network, peripherals, machine — beside the logo of the running distro, and
+clears the screen first so the result is one screenshot.
+
+It measures the terminal and drops detail until it fits: first the rows that
+restate something (signature, cache, board), then the per-device breakdowns.
+Below 56 columns it falls back to the plain list. Give it a taller or wider
+window and it fills it.
 
 --no-art gives that plain list directly. Use it when something is reading
 this output: it is one fact per line, no frame, no logo.
@@ -118,13 +124,14 @@ list_logos() {
 main() {
   # Rain is opt-in: a duration of 0 means no animation at all.
   # Color is resolved after parsing, since auto depends on the TTY check below.
-  local rain=1 color=1 duration=0 color_mode=auto art=1 logo=auto
+  local rain=1 color=1 duration=0 color_mode=auto art=1 logo=auto clear=1
 
   while [ $# -gt 0 ]; do
     case "$1" in
       -n | --no-rain) rain=0 ;;
       --no-art) art=0 ;;
       --no-logo) logo=none ;;
+      --no-clear) clear=0 ;;
       --logo=*) logo="${1#--logo=}" ;;
       --logo)
         [ $# -ge 2 ] || die "--logo needs a name; --list-logos prints them"
@@ -203,6 +210,7 @@ main() {
 
   render_init "$color" "$art"
   DF_LOGO="$logo"
+  DF_CLEAR="$clear"
   if [ "$rain" -eq 1 ]; then
     render_rain "$duration"
   fi

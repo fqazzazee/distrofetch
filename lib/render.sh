@@ -36,6 +36,10 @@ DF_ART=1
 # Set from --logo / --no-logo. A name selects a specific logo regardless of the distro.
 DF_LOGO=auto
 
+# Set from --no-clear. The dashboard is meant to be looked at whole, so by default it
+# starts from a clean screen; anything scripting against this uses --no-art anyway.
+DF_CLEAR=1
+
 # Half-width katakana is what the film used, and half-width matters: every glyph has to
 # occupy exactly one cell or the columns shear.
 #
@@ -406,6 +410,29 @@ _df_pad_panel() {
 
 DF_D_ID=""
 DF_D_VERSION=""
+
+# Device enumerations, read once. The dashboard is built more than once when it has to
+# be condensed to fit the terminal, and re-walking sysfs for each attempt would triple
+# the syscalls for output that is thrown away.
+DF_GPUS=()
+DF_NICS=()
+DF_USB=()
+DF_TBT=()
+DF_TBT_DEVS=()
+DF_DISKS=()
+
+# How much detail the panels carry: 2 full, 1 compact, 0 minimal. Lowered until the
+# dashboard fits the terminal — see _df_fit_detail.
+DF_DETAIL=2
+
+_df_collect_devices() {
+  mapfile -t DF_GPUS < <(detect_gpus)
+  mapfile -t DF_NICS < <(detect_nics)
+  mapfile -t DF_USB < <(detect_usb_buses)
+  mapfile -t DF_TBT < <(detect_thunderbolt)
+  mapfile -t DF_TBT_DEVS < <(detect_thunderbolt_devices)
+  mapfile -t DF_DISKS < <(detect_disks)
+}
 DF_LOGO_LINES=()
 DF_LOGO_WIDTH=0
 
@@ -459,13 +486,46 @@ _df_load_logo() {
 # The dashboard
 # ---------------------------------------------------------------------------
 
+# Whether a panel has nothing to report — its only content row is a "none present"
+# style answer. At the tightest density these are dropped entirely: a panel whose one
+# row says "no Thunderbolt controller" costs three lines to say nothing, and on a
+# container that is three of them.
+_df_panel_is_empty() {
+  # shellcheck disable=SC2178  # nameref to an array, not a string assignment
+  local -n _p="$1"
+  local n="${#_p[@]}" i
+
+  # Two borders and at least one content row. Every content row has to be a "none"
+  # answer, not just the first — the peripherals panel says it twice, once for USB and
+  # once for Thunderbolt, and checking only row one left it on screen.
+  [ "$n" -ge 3 ] || return 1
+  for ((i = 1; i < n - 1; i++)); do
+    case "${_p[$i]}" in
+      *'none present'* | *'none with a hardware device'* | *'no host controllers'* | \
+        *'no Thunderbolt or USB4 controller'* | *'no disks'* | *'Disks'*'none'*) ;;
+      *) return 1 ;;
+    esac
+  done
+  return 0
+}
+
+# The dashboard, sized to the terminal.
+#
+# Built at full detail and rebuilt at lower detail until it fits the height. Rebuilding
+# is cheap: every probe and every sysfs walk is cached, and only the row formatting is
+# redone. The order of attempts is strictly decreasing in information, so the result is
+# always the most complete layout that fits.
 render_dashboard() {
-  local cols width logo_w body_w
+  local cols width logo_w body_w rows avail attempt paired half half2 height
   # shellcheck disable=SC2034  # filled through namerefs by the _df_build_* helpers
-  local -a p_system p_distro p_cpu p_mem p_machine p_gpu p_net p_periph
+  local -a p_system p_distro p_cpu p_mem p_machine p_gpu p_net p_periph p_storage
+  # shellcheck disable=SC2034  # filled through a nameref by _df_which_panels
+  local -a shown=()
+  local dense=0
 
   DF_D_ID="$(detect_distro_id)"
   DF_D_VERSION="$(detect_distro_version)"
+  _df_collect_devices
 
   cols="$(_df_cols)"
   # Capped because panels stretched across an ultrawide terminal are unreadable: the
@@ -482,8 +542,6 @@ render_dashboard() {
   _df_load_logo
   _df_load_cpu_logo
   logo_w="$DF_LOGO_WIDTH"
-  # One space joins the logo column to the body, so the body gets everything else.
-  # Reserving two here silently loses the rightmost column of every panel.
   body_w=$((width - logo_w - 1))
   # Below this the panels are narrower than their own content; drop the art instead.
   if [ "$body_w" -lt 52 ]; then
@@ -492,58 +550,206 @@ render_dashboard() {
     body_w="$width"
   fi
 
+  # One line held back for the shell prompt that will land under this.
+  rows="$(_df_rows)"
+  avail=$((rows - 1))
+
+  paired=0
+  [ "$body_w" -ge 108 ] && paired=1
+  half=$(((body_w - 1) / 2))
+  half2=$((body_w - 1 - half))
+
+  # detail:dense:drop-logo. Two columns of panels is a bigger loss of legibility than
+  # dropping a row, so every detail level is tried stacked before anything is paired;
+  # the logo goes last because it is the one thing here that is decoration.
+  local saved_logo=("${DF_LOGO_LINES[@]}")
+  local drop_logo
+  for attempt in 2:0:0 1:0:0 0:0:0 1:1:0 0:1:0 0:1:1; do
+    IFS=: read -r DF_DETAIL dense drop_logo <<<"$attempt"
+    [ "$paired" -eq 1 ] || dense=0
+    if [ "$drop_logo" -eq 1 ]; then
+      DF_LOGO_LINES=()
+      logo_w=0
+      body_w="$width"
+      half=$(((body_w - 1) / 2))
+      half2=$((body_w - 1 - half))
+    else
+      DF_LOGO_LINES=("${saved_logo[@]}")
+    fi
+
+    # System and distribution share a row only when the body is wide enough for two
+    # columns; at narrower widths they are full-width panels like everything else.
+    if [ "$paired" -eq 1 ]; then
+      _df_build_system p_system "$half"
+      _df_build_distro p_distro "$half2"
+    else
+      _df_build_system p_system "$body_w"
+      _df_build_distro p_distro "$body_w"
+    fi
+
+    # First pass at full width. This is what decides which panels have anything to
+    # say, and that decision has to come before widths are assigned — dropping an
+    # empty panel shifts every later one to the other side of the pairing, and a panel
+    # built at full width sitting in a half-width slot overruns the frame.
+    _df_build_cpu p_cpu "$body_w"
+    _df_build_memory p_mem "$body_w"
+    _df_build_storage p_storage "$body_w"
+    _df_build_graphics p_gpu "$body_w"
+    _df_build_network p_net "$body_w"
+    _df_build_peripherals p_periph "$body_w"
+    _df_build_machine p_machine "$body_w"
+
+    _df_which_panels shown "$attempt"
+
+    if [ "$dense" -eq 1 ]; then
+      _df_rebuild_paired shown "$half" "$half2" "$body_w"
+    fi
+    height="$(_df_measure "$paired" "$dense" "$half" shown)"
+
+    if [ "$height" -le "$avail" ]; then
+      break
+    fi
+  done
+
+  # Clearing is the last thing before drawing, so a failed run leaves the screen it
+  # found intact. Only on a terminal: an escape in a pipe is exactly what the non-TTY
+  # checks exist to prevent.
+  if [ "$DF_CLEAR" -eq 1 ] && [ -t 1 ]; then
+    printf '\033[H\033[2J'
+  fi
+
   _df_header "$width"
 
-  # Two panel columns once there is room for both to hold a full value; one otherwise.
-  if [ "$body_w" -ge 108 ]; then
-    # One space between the two columns; the right one absorbs an odd remainder so the
-    # pair always spans exactly body_w.
-    local half=$(((body_w - 1) / 2))
-    local half2=$((body_w - 1 - half))
-    _df_build_system p_system "$half"
-    _df_build_distro p_distro "$half2"
-    # Graphics and network take the full width for the same reason memory does: a PCI
-    # device name is long by nature ("Intel Raptor Lake-P [Iris Xe Graphics]"), and
-    # clipping it removes the only part anyone reads.
-    _df_build_graphics p_gpu "$body_w"
-    _df_build_network p_net "$body_w"
-    _df_build_peripherals p_periph "$body_w"
-    # Three panels take the full width, each for its own reason: the processor panel
-    # carries a vendor logo in its gutter, a DIMM line carries locator, size, type,
-    # form factor, both speeds, and a part number, and the machine panel holds vendor
-    # strings long enough to clip at half width ("ASUSTeK COMPUTER INC. Zenbook Fl...").
-    _df_build_cpu p_cpu "$body_w"
-    _df_build_memory p_mem "$body_w"
-    _df_build_machine p_machine "$body_w"
-
+  if [ "$paired" -eq 1 ]; then
     _df_equalize p_system p_distro "$half" "$half2"
-
     _df_logo_beside p_system p_distro "$logo_w" "$half" "$half2"
-    _df_indent_panel p_cpu "$logo_w"
-    _df_indent_panel p_mem "$logo_w"
-    _df_indent_panel p_gpu "$logo_w"
-    _df_indent_panel p_net "$logo_w"
-    _df_indent_panel p_periph "$logo_w"
-    _df_indent_panel p_machine "$logo_w"
   else
-    _df_build_system p_system "$body_w"
-    _df_build_distro p_distro "$body_w"
-    _df_build_cpu p_cpu "$body_w"
-    _df_build_memory p_mem "$body_w"
-    _df_build_graphics p_gpu "$body_w"
-    _df_build_network p_net "$body_w"
-    _df_build_peripherals p_periph "$body_w"
-    _df_build_machine p_machine "$body_w"
-
     _df_logo_stack p_system "$logo_w" "$body_w"
     _df_indent_panel p_distro "$logo_w"
-    _df_indent_panel p_cpu "$logo_w"
-    _df_indent_panel p_mem "$logo_w"
-    _df_indent_panel p_gpu "$logo_w"
-    _df_indent_panel p_net "$logo_w"
-    _df_indent_panel p_periph "$logo_w"
-    _df_indent_panel p_machine "$logo_w"
   fi
+  _df_emit_body "$dense" "$logo_w" "$half" "$half2" shown
+}
+
+# Which panels survive this attempt. At the tightest densities a panel with nothing to
+# report is dropped rather than printed as three lines of "none".
+_df_which_panels() {
+  local -n _shown="$1"
+  local attempt="$2"
+  local name
+  _shown=()
+  for name in p_cpu p_mem p_storage p_gpu p_net p_periph p_machine; do
+    if [ "$DF_DETAIL" -eq 0 ] && _df_panel_is_empty "$name"; then
+      continue
+    fi
+    _shown+=("$name")
+  done
+}
+
+# Rebuild the panels that will sit in a pair at the width of their slot, left column
+# first. An odd final panel keeps the full width, since it has the row to itself.
+_df_rebuild_paired() {
+  # shellcheck disable=SC2178  # nameref to an array, not a string assignment
+  local -n _shown="$1"
+  local half="$2" half2="$3" body_w="$4"
+  local i n="${#_shown[@]}" w
+
+  for ((i = 0; i < n; i++)); do
+    if [ "$i" -eq $((n - 1)) ] && [ $((n % 2)) -eq 1 ]; then
+      w="$body_w"
+    elif [ $((i % 2)) -eq 0 ]; then
+      w="$half"
+    else
+      w="$half2"
+    fi
+    _df_build_by_name "${_shown[$i]}" "$w"
+  done
+}
+
+# Dispatch to the builder that owns a panel array. The mapping lives in one place so
+# the fit loop can rebuild any panel at any width without knowing what it holds.
+_df_build_by_name() {
+  case "$1" in
+    p_cpu) _df_build_cpu p_cpu "$2" ;;
+    p_mem) _df_build_memory p_mem "$2" ;;
+    p_storage) _df_build_storage p_storage "$2" ;;
+    p_gpu) _df_build_graphics p_gpu "$2" ;;
+    p_net) _df_build_network p_net "$2" ;;
+    p_periph) _df_build_peripherals p_periph "$2" ;;
+    p_machine) _df_build_machine p_machine "$2" ;;
+  esac
+}
+
+# Height of a layout without rendering it.
+_df_measure() {
+  local is_paired="$1" dense="$2" half="$3"
+  # shellcheck disable=SC2178  # nameref to an array, not a string assignment
+  local -n _shown="$4"
+  local -n _sys=p_system
+  local -n _dist=p_distro
+  local total=3 first name i
+  # 3 = title line, rule, blank.
+
+  if [ "$is_paired" -eq 1 ]; then
+    first="${#_sys[@]}"
+    [ "${#_dist[@]}" -gt "$first" ] && first="${#_dist[@]}"
+  else
+    first=$((${#_sys[@]} + ${#_dist[@]}))
+  fi
+  [ "${#DF_LOGO_LINES[@]}" -gt "$first" ] && first="${#DF_LOGO_LINES[@]}"
+  total=$((total + first))
+
+  if [ "$dense" -eq 1 ]; then
+    i=0
+    while [ "$i" -lt "${#_shown[@]}" ]; do
+      total=$((total + $(_df_pair_height "${_shown[$i]}" "${_shown[$((i + 1))]:-}")))
+      i=$((i + 2))
+    done
+  else
+    for name in "${_shown[@]}"; do
+      # shellcheck disable=SC2178  # nameref to an array, not a string assignment
+      local -n _p="$name"
+      total=$((total + ${#_p[@]}))
+    done
+  fi
+  printf '%s' "$total"
+}
+
+_df_pair_height() {
+  local -n _a="$1"
+  local h="${#_a[@]}"
+  if [ -n "$2" ]; then
+    local -n _b="$2"
+    [ "${#_b[@]}" -gt "$h" ] && h="${#_b[@]}"
+  fi
+  printf '%s' "$h"
+}
+
+# Emit the panels below the first row, stacked or two across.
+_df_emit_body() {
+  local dense="$1" logo_w="$2" half="$3" half2="$4"
+  # shellcheck disable=SC2178  # nameref to an array, not a string assignment
+  local -n _shown="$5"
+  local i name a b
+
+  if [ "$dense" -ne 1 ]; then
+    for name in "${_shown[@]}"; do
+      _df_indent_panel "$name" "$logo_w"
+    done
+    return 0
+  fi
+
+  i=0
+  while [ "$i" -lt "${#_shown[@]}" ]; do
+    a="${_shown[$i]}"
+    b="${_shown[$((i + 1))]:-}"
+    if [ -n "$b" ]; then
+      _df_equalize "$a" "$b" "$half" "$half2"
+      _df_indent_pair "$a" "$b" "$logo_w" "$half" "$half2"
+    else
+      _df_indent_panel "$a" "$logo_w"
+    fi
+    i=$((i + 2))
+  done
 }
 
 # The top bar: wordmark on the left, user@host on the right, one rule under both.
@@ -683,13 +889,14 @@ _df_indent_pair() {
 _df_build_system() {
   local -n _out="$1"
   local w="$2"
-  _df_panel _out SYSTEM "$w" 9 - \
-    "OS${DF_FS}$(detect_os)" \
-    "Kernel${DF_FS}$(detect_kernel)" \
-    "Arch${DF_FS}$(detect_arch)" \
-    "Uptime${DF_FS}$(detect_uptime)" \
-    "Shell${DF_FS}$(detect_shell)" \
-    "Packages${DF_FS}$(detect_packages)"
+  local -a rows=()
+  rows+=("OS${DF_FS}$(detect_os)")
+  rows+=("Kernel${DF_FS}$(detect_kernel)")
+  [ "$DF_DETAIL" -ge 1 ] && rows+=("Arch${DF_FS}$(detect_arch)")
+  rows+=("Uptime${DF_FS}$(detect_uptime)")
+  [ "$DF_DETAIL" -ge 1 ] && rows+=("Shell${DF_FS}$(detect_shell)")
+  rows+=("Packages${DF_FS}$(detect_packages)")
+  _df_panel _out SYSTEM "$w" 9 - "${rows[@]}"
 }
 
 _df_build_distro() {
@@ -708,12 +915,13 @@ _df_build_distro() {
     *) level="" ;;
   esac
 
-  _df_panel _out DISTRIBUTION "$w" 9 - \
-    "ID${DF_FS}$DF_D_ID" \
-    "Version${DF_FS}${version:-rolling}" \
-    "Codename${DF_FS}${codename:-none}" \
-    "Released${DF_FS}${released:-unknown}" \
-    "Support${DF_FS}${support:-unknown}${DF_FS}$level"
+  local -a rows=()
+  rows+=("ID${DF_FS}$DF_D_ID")
+  rows+=("Version${DF_FS}${version:-rolling}")
+  [ "$DF_DETAIL" -ge 2 ] && rows+=("Codename${DF_FS}${codename:-none}")
+  [ "$DF_DETAIL" -ge 1 ] && rows+=("Released${DF_FS}${released:-unknown}")
+  rows+=("Support${DF_FS}${support:-unknown}${DF_FS}$level")
+  _df_panel _out DISTRIBUTION "$w" 9 - "${rows[@]}"
 }
 
 _df_build_cpu() {
@@ -766,17 +974,19 @@ _df_build_cpu() {
     art='-'
   fi
 
-  _df_panel _out PROCESSOR "$w" 10 "$art" \
-    "Model${DF_FS}$(detect_cpu)" \
-    "Vendor${DF_FS}$vendor" \
-    "Generation${DF_FS}$genline" \
-    "$(_df_currency_row "$ordinal" "$latest_o" "$latest_label" "$latest_year")" \
-    "Micro-arch${DF_FS}$microline" \
-    "Signature${DF_FS}$(detect_cpu_signature)" \
-    "Topology${DF_FS}$(detect_cpu_topology)" \
-    "Clock${DF_FS}$(detect_cpu_freq)" \
-    "Cache${DF_FS}$(detect_cpu_cache)" \
-    "Features${DF_FS}$(detect_cpu_features)"
+  local -a rows=()
+  rows+=("Model${DF_FS}$(detect_cpu)")
+  [ "$DF_DETAIL" -ge 2 ] && rows+=("Vendor${DF_FS}$vendor")
+  rows+=("Generation${DF_FS}$genline")
+  rows+=("$(_df_currency_row "$ordinal" "$latest_o" "$latest_label" "$latest_year")")
+  [ "$DF_DETAIL" -ge 1 ] && rows+=("Micro-arch${DF_FS}$microline")
+  [ "$DF_DETAIL" -ge 2 ] && rows+=("Signature${DF_FS}$(detect_cpu_signature)")
+  rows+=("Topology${DF_FS}$(detect_cpu_topology)")
+  [ "$DF_DETAIL" -ge 1 ] && rows+=("Clock${DF_FS}$(detect_cpu_freq)")
+  [ "$DF_DETAIL" -ge 2 ] && rows+=("Cache${DF_FS}$(detect_cpu_cache)")
+  [ "$DF_DETAIL" -ge 1 ] && rows+=("Features${DF_FS}$(detect_cpu_features)")
+
+  _df_panel _out PROCESSOR "$w" 10 "$art" "${rows[@]}"
 }
 
 # The "N generations behind" row.
@@ -823,7 +1033,7 @@ _df_build_memory() {
   local line locator size type ff speed cfg maker size_gib slots populated=0
 
   rows+=("RAM${DF_FS}$(detect_memory)")
-  rows+=("Swap${DF_FS}$(detect_swap)")
+  [ "$DF_DETAIL" -ge 1 ] && rows+=("Swap${DF_FS}$(detect_swap)")
 
   if dmi_raw_readable; then
     slots="$(dmi_slot_count)"
@@ -845,7 +1055,9 @@ _df_build_memory() {
       else
         speed="speed unknown"
       fi
-      rows+=("${DF_FS}${locator}: ${size} ${type:+$type }${ff:+$ff }@ ${speed}${maker:+ - $maker}")
+      if [ "$DF_DETAIL" -ge 1 ]; then
+        rows+=("${DF_FS}${locator}: ${size} ${type:+$type }${ff:+$ff }@ ${speed}${maker:+ - $maker}")
+      fi
     done < <(dmi_dimms)
     rows+=("Slots${DF_FS}${populated} of ${slots} populated")
   else
@@ -858,31 +1070,37 @@ _df_build_memory() {
 _df_build_machine() {
   local -n _out="$1"
   local w="$2"
-  _df_panel _out MACHINE "$w" 9 - \
-    "Model${DF_FS}$(detect_machine)" \
-    "Board${DF_FS}$(detect_board)" \
-    "Firmware${DF_FS}$(detect_bios)"
+  local -a rows=()
+  rows+=("Model${DF_FS}$(detect_machine)")
+  [ "$DF_DETAIL" -ge 2 ] && rows+=("Board${DF_FS}$(detect_board)")
+  [ "$DF_DETAIL" -ge 1 ] && rows+=("Firmware${DF_FS}$(detect_bios)")
+  _df_panel _out MACHINE "$w" 9 - "${rows[@]}"
 }
 
 _df_build_graphics() {
   local -n _out="$1"
   local w="$2"
   local -a rows=()
-  local line vendor device driver kind name label
+  local rec vendor device driver kind name label
 
-  while IFS='|' read -r vendor device driver kind; do
-    [ -n "$vendor" ] || continue
+  for rec in "${DF_GPUS[@]}"; do
+    [ -n "$rec" ] || continue
+    IFS='|' read -r vendor device driver kind <<<"$rec"
     name="$(hwdata_pci_name "$vendor" "$device")"
     case "$kind" in
       3d) label="3D" ;;
       display) label="Display" ;;
       *) label="GPU" ;;
     esac
-    rows+=("${label}${DF_FS}${name}${driver:+ (${driver})}")
-  done < <(detect_gpus)
+    if [ "$DF_DETAIL" -ge 1 ] && [ -n "$driver" ]; then
+      rows+=("${label}${DF_FS}${name} (${driver})")
+    else
+      rows+=("${label}${DF_FS}${name}")
+    fi
+  done
 
   if [ "${#rows[@]}" -eq 0 ]; then
-    # No display class device at all is normal on a server or in a container, and is a
+    # No display-class device at all is normal on a server or in a container, and is a
     # different answer from "there is one and I could not name it".
     rows+=("GPU${DF_FS}none present")
   fi
@@ -890,27 +1108,91 @@ _df_build_graphics() {
   _df_panel _out GRAPHICS "$w" 9 - "${rows[@]}"
 }
 
+_df_build_storage() {
+  local -n _out="$1"
+  local w="$2"
+  local -a rows=()
+  local rec name size rot model transport pcie kind detail
+
+  for rec in "${DF_DISKS[@]}"; do
+    [ -n "$rec" ] || continue
+    IFS='|' read -r name size rot model transport pcie <<<"$rec"
+
+    # rotational is the only reliable SSD/HDD signal in sysfs, and it is exact: the
+    # kernel sets it from whether the device advertises a rotation rate.
+    if [ "$rot" = 0 ]; then
+      kind=SSD
+    elif [ "$rot" = 1 ]; then
+      kind=HDD
+    else
+      kind=disk
+    fi
+    [ "$transport" = nvme ] && kind=NVMe
+
+    detail="$(disk_size_human "$size") ${kind}"
+    [ -n "$model" ] && detail="$detail ${model}"
+    # The PCIe link is the interesting part of an NVMe drive: a Gen4 drive in a Gen3
+    # slot halves its throughput and nothing else on the system says so.
+    if [ "$DF_DETAIL" -ge 1 ] && [ -n "$pcie" ]; then
+      detail="$detail - $pcie"
+    fi
+    rows+=("${name}${DF_FS}${detail}")
+  done
+
+  if [ "${#rows[@]}" -eq 0 ]; then
+    rows+=("Disks${DF_FS}none present")
+  fi
+
+  _df_panel _out STORAGE "$w" 9 - "${rows[@]}"
+}
+
 _df_build_network() {
   local -n _out="$1"
   local w="$2"
   local -a rows=()
-  local name kind vendor device driver state speed model link
+  local rec name kind vendor device driver state speed model link gen rated
 
-  while IFS='|' read -r name kind vendor device driver state speed; do
-    [ -n "$name" ] || continue
+  for rec in "${DF_NICS[@]}"; do
+    [ -n "$rec" ] || continue
+    IFS='|' read -r name kind vendor device driver state speed <<<"$rec"
     model="$(hwdata_pci_name "$vendor" "$device")"
 
-    if [ -n "$speed" ]; then
-      link="$state, $(dev_speed_human "$speed")"
+    if [ "$kind" = wifi ]; then
+      gen="$(wifi_generation "$model")"
+      if [ -n "$gen" ]; then
+        link="$gen"
+      elif wifi_is_cnvi "$model"; then
+        # Not a gap in the lookup — a gap in what the PCI ID can express. CNVi puts the
+        # wireless MAC in the chipset and the radio in a separate module, so two
+        # machines with this same ID can be Wi-Fi 6 and Wi-Fi 6E.
+        link="CNVi, generation set by the RF module not the PCI ID"
+      else
+        link="Wi-Fi"
+      fi
+      [ -n "$state" ] && link="$link, $state"
     else
+      rated="$(ethernet_rated_speed "$model")"
       link="$state"
+      if [ -n "$speed" ]; then
+        link="$link at $(dev_speed_human "$speed")"
+      fi
+      # Rated versus negotiated is the pair that identifies a bad cable or a switch
+      # port stuck at 100 Mbps, and neither number says it alone.
+      if [ -n "$rated" ]; then
+        if [ -n "$speed" ] && [ "$rated" = "$(dev_speed_human "$speed")" ]; then
+          link="$link (at its rated speed)"
+        else
+          link="$link, rated $rated"
+        fi
+      fi
     fi
-    # Wireless has no single negotiated rate to report, and inventing one from the
-    # current PHY rate would change between reads.
-    [ "$kind" = wifi ] && link="$link, Wi-Fi"
 
-    rows+=("${name}${DF_FS}${model}${driver:+ (${driver})} - ${link}")
-  done < <(detect_nics)
+    if [ "$DF_DETAIL" -ge 1 ] && [ -n "$driver" ]; then
+      rows+=("${name}${DF_FS}${model} (${driver}) - ${link}")
+    else
+      rows+=("${name}${DF_FS}${model} - ${link}")
+    fi
+  done
 
   if [ "${#rows[@]}" -eq 0 ]; then
     rows+=("Interfaces${DF_FS}none with a hardware device")
@@ -923,16 +1205,17 @@ _df_build_peripherals() {
   local -n _out="$1"
   local w="$2"
   local -a rows=() order=()
-  local bus speed version ports name key best=0
+  local rec bus speed version ports name key best=0 total_ports=0
   local domain gen security iommu tvendor tdevice
-  local id dvendor ddevice authorized found_tbt=0
+  local id dvendor ddevice authorized found_tbt=0 tbt_summary=""
   declare -A count ports_total label
 
   # Grouped by speed class rather than listed per controller. Four lines saying
   # "usb1: USB 2.0 ... usb3: USB 2.0 ..." carry one fact between them; the useful
   # question is what speeds this machine can do and how many ports run at each.
-  while IFS='|' read -r bus speed version ports; do
-    [ -n "$bus" ] || continue
+  for rec in "${DF_USB[@]}"; do
+    [ -n "$rec" ] || continue
+    IFS='|' read -r bus speed version ports <<<"$rec"
     name="$(usb_speed_name "$speed")"
     key="${speed:-0}"
     case "$speed" in
@@ -947,7 +1230,8 @@ _df_build_peripherals() {
     fi
     count[$key]=$((count[$key] + 1))
     ports_total[$key]=$((ports_total[$key] + ${ports:-0}))
-  done < <(detect_usb_buses)
+    total_ports=$((total_ports + ${ports:-0}))
+  done
 
   if [ "${#order[@]}" -gt 0 ]; then
     # Root-hub port counts do not sum to the sockets on the chassis: one USB-C
@@ -955,28 +1239,40 @@ _df_build_peripherals() {
     # routinely double the number of holes in the case. Saying so costs a clause and
     # stops the number being read as something it is not.
     rows+=("USB${DF_FS}fastest $(dev_speed_human "$best"); root ports are per controller, not sockets")
-    for key in "${order[@]}"; do
-      rows+=("${DF_FS}  ${label[$key]}: ${count[$key]} controller$([ "${count[$key]}" = 1 ] || printf s), ${ports_total[$key]} root port$([ "${ports_total[$key]}" = 1 ] || printf s)")
-    done
+    if [ "$DF_DETAIL" -ge 1 ]; then
+      for key in "${order[@]}"; do
+        rows+=("${DF_FS}  ${label[$key]}: ${count[$key]} controller$([ "${count[$key]}" = 1 ] || printf s), ${ports_total[$key]} root port$([ "${ports_total[$key]}" = 1 ] || printf s)")
+      done
+    fi
   else
     rows+=("USB${DF_FS}no host controllers")
   fi
 
-  while IFS='|' read -r domain gen security iommu tvendor tdevice; do
-    [ -n "$domain" ] || continue
+  for rec in "${DF_TBT[@]}"; do
+    [ -n "$rec" ] || continue
+    IFS='|' read -r domain gen security iommu tvendor tdevice <<<"$rec"
     found_tbt=1
-    rows+=("Thunderbolt${DF_FS}${domain}: $(tbt_generation_name "$gen")${tvendor:+, ${tvendor} ${tdevice}}")
-    rows+=("${DF_FS}  security: $(tbt_security_name "$security"); IOMMU DMA protection $(if [ "$iommu" = 1 ]; then printf on; else printf off; fi)")
-  done < <(detect_thunderbolt)
+    if [ "$DF_DETAIL" -ge 2 ]; then
+      rows+=("Thunderbolt${DF_FS}${domain}: $(tbt_generation_name "$gen")${tvendor:+, ${tvendor} ${tdevice}}")
+      rows+=("${DF_FS}  security: $(tbt_security_name "$security"); IOMMU DMA protection $(if [ "$iommu" = 1 ]; then printf on; else printf off; fi)")
+    else
+      # Condensed: one line for however many domains, since they are almost always
+      # identical controllers on the same chip.
+      tbt_summary="$(tbt_generation_name "$gen"), security $security"
+    fi
+  done
 
   if [ "$found_tbt" -eq 0 ]; then
     rows+=("Thunderbolt${DF_FS}no Thunderbolt or USB4 controller")
+  elif [ -n "$tbt_summary" ]; then
+    rows+=("Thunderbolt${DF_FS}${#DF_TBT[@]} domain$([ "${#DF_TBT[@]}" = 1 ] || printf s): ${tbt_summary}")
   fi
 
-  while IFS='|' read -r id dvendor ddevice authorized; do
-    [ -n "$id" ] || continue
+  for rec in "${DF_TBT_DEVS[@]}"; do
+    [ -n "$rec" ] || continue
+    IFS='|' read -r id dvendor ddevice authorized <<<"$rec"
     rows+=("${DF_FS}  attached ${id}: ${dvendor} ${ddevice}$(if [ "$authorized" = 1 ]; then printf ' (authorised)'; else printf ' (not authorised)'; fi)")
-  done < <(detect_thunderbolt_devices)
+  done
 
   _df_panel _out PERIPHERALS "$w" 11 - "${rows[@]}"
 }
@@ -989,6 +1285,8 @@ _df_build_peripherals() {
 # no frame, no logo: greppable, diffable, and stable for anything parsing it.
 render_plain() {
   local support
+  # render_plain is also the narrow-terminal fallback, reached before any collection.
+  [ "${#DF_DISKS[@]}" -gt 0 ] || _df_collect_devices
 
   printf '%s%s%s@%s%s%s\n' "$DF_BOLD$DF_BRIGHT" "${USER:-$(id -un)}" "$DF_RESET" \
     "$DF_BOLD$DF_BRIGHT" "$(detect_host)" "$DF_RESET"
@@ -1013,6 +1311,7 @@ render_plain() {
   _df_plain_field 'Cache:' "$(detect_cpu_cache)"
   _df_plain_field 'Memory:' "$(detect_memory)"
   _df_plain_field 'Swap:' "$(detect_swap)"
+  _df_plain_field 'Disks:' "$(_df_plain_disks)"
   _df_plain_field 'GPU:' "$(_df_plain_gpus)"
   _df_plain_field 'Network:' "$(_df_plain_nics)"
   _df_plain_field 'USB:' "$(_df_plain_usb)"
@@ -1044,41 +1343,71 @@ _df_plain_generation() {
 
 # The device lists as one line each, for the plain report. Multiple devices are joined
 # with "; " rather than wrapped, so the one-fact-per-line contract holds.
+# The device lists as one line each, for the plain report. Multiple devices are joined
+# with "; " rather than wrapped, so the one-fact-per-line contract holds. All of these
+# read the caches that _df_collect_devices filled, so nothing walks sysfs twice.
+_df_plain_disks() {
+  local rec name size rot model transport pcie kind out=""
+  for rec in "${DF_DISKS[@]}"; do
+    [ -n "$rec" ] || continue
+    IFS='|' read -r name size rot model transport pcie <<<"$rec"
+    if [ "$transport" = nvme ]; then
+      kind=NVMe
+    elif [ "$rot" = 1 ]; then
+      kind=HDD
+    else
+      kind=SSD
+    fi
+    out="${out:+$out; }${name} $(disk_size_human "$size") ${kind}${model:+ $model}${pcie:+ $pcie}"
+  done
+  printf '%s' "${out:-none}"
+}
+
 _df_plain_gpus() {
-  local vendor device driver kind out=""
-  while IFS='|' read -r vendor device driver kind; do
-    [ -n "$vendor" ] || continue
+  local rec vendor device driver kind out=""
+  for rec in "${DF_GPUS[@]}"; do
+    [ -n "$rec" ] || continue
+    IFS='|' read -r vendor device driver kind <<<"$rec"
     out="${out:+$out; }$(hwdata_pci_name "$vendor" "$device")${driver:+ ($driver)}"
-  done < <(detect_gpus)
+  done
   printf '%s' "${out:-none present}"
 }
 
 _df_plain_nics() {
-  local name kind vendor device driver state speed out="" entry
-  while IFS='|' read -r name kind vendor device driver state speed; do
-    [ -n "$name" ] || continue
-    entry="$name $(hwdata_pci_name "$vendor" "$device") $state"
+  local rec name kind vendor device driver state speed out="" entry model
+  for rec in "${DF_NICS[@]}"; do
+    [ -n "$rec" ] || continue
+    IFS='|' read -r name kind vendor device driver state speed <<<"$rec"
+    model="$(hwdata_pci_name "$vendor" "$device")"
+    entry="$name $model $state"
     [ -n "$speed" ] && entry="$entry $(dev_speed_human "$speed")"
-    out="${out:+$out; }$entry"
-  done < <(detect_nics)
+    if [ "$kind" = wifi ]; then
+      entry="$entry $(wifi_generation "$model")"
+    else
+      entry="$entry $(ethernet_rated_speed "$model")"
+    fi
+    out="${out:+$out; }${entry% }"
+  done
   printf '%s' "${out:-none}"
 }
 
 _df_plain_usb() {
-  local bus speed version ports out=""
-  while IFS='|' read -r bus speed version ports; do
-    [ -n "$bus" ] || continue
+  local rec bus speed version ports out=""
+  for rec in "${DF_USB[@]}"; do
+    [ -n "$rec" ] || continue
+    IFS='|' read -r bus speed version ports <<<"$rec"
     out="${out:+$out; }${bus} $(usb_speed_name "$speed") $(dev_speed_human "$speed") ${ports:-0} root ports"
-  done < <(detect_usb_buses)
+  done
   printf '%s' "${out:-none}"
 }
 
 _df_plain_tbt() {
-  local domain gen security iommu tvendor tdevice out=""
-  while IFS='|' read -r domain gen security iommu tvendor tdevice; do
-    [ -n "$domain" ] || continue
+  local rec domain gen security iommu tvendor tdevice out=""
+  for rec in "${DF_TBT[@]}"; do
+    [ -n "$rec" ] || continue
+    IFS='|' read -r domain gen security iommu tvendor tdevice <<<"$rec"
     out="${out:+$out; }${domain} $(tbt_generation_name "$gen") security=$security"
-  done < <(detect_thunderbolt)
+  done
   printf '%s' "${out:-none}"
 }
 

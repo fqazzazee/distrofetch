@@ -102,8 +102,11 @@ jobs:
           fi
 
           # --- the dashboard ------------------------------------------------------
-          COLUMNS=140 distrofetch --no-color | tee /tmp/dash.txt
-          for section in SYSTEM DISTRIBUTION PROCESSOR MEMORY MACHINE; do
+          # LINES is pinned so the density system does not condense away the rows
+          # these assertions name. A runner has no controlling terminal, so tput
+          # would otherwise report the 24-line fallback.
+          COLUMNS=140 LINES=80 distrofetch --no-color --no-clear | tee /tmp/dash.txt
+          for section in SYSTEM DISTRIBUTION PROCESSOR MEMORY STORAGE MACHINE; do
             grep -q "$section" /tmp/dash.txt \
               || { echo "missing panel: $section" >&2; exit 1; }
           done
@@ -136,7 +139,7 @@ jobs:
           # carries two three-byte borders where a paired row carries four. Those rows
           # are the same width on screen and differ by four bytes, so a byte-wise
           # check reports a shear that is not there.
-          COLUMNS=140 distrofetch --no-color \
+          COLUMNS=140 LINES=80 distrofetch --no-color --no-clear \
             | sed -e 's/│/|/g' -e 's/┌/+/g' -e 's/┐/+/g' -e 's/└/+/g' \
                   -e 's/┘/+/g' -e 's/├/+/g' -e 's/┤/+/g' -e 's/─/-/g' \
             > /tmp/flat.txt
@@ -175,7 +178,7 @@ jobs:
           # virtio NIC, and no Thunderbolt. What must hold is that each panel renders
           # and reaches a definite answer — "none present" is a fact, a blank row is a
           # bug, and "unknown" would be neither.
-          for section in GRAPHICS NETWORK PERIPHERALS; do
+          for section in GRAPHICS NETWORK PERIPHERALS STORAGE; do
             grep -q "$section" /tmp/dash.txt \
               || { echo "missing panel: $section" >&2; exit 1; }
           done
@@ -197,6 +200,24 @@ jobs:
               exit 1
             fi
           done
+
+          # --- fitting the terminal -----------------------------------------------
+          # The dashboard is meant to be one screenshot, so it gives up detail rather
+          # than scrolling. Checked at three heights, including one too short for the
+          # full layout, which is the case the density system exists for.
+          for h in 60 40 30; do
+            n="$(COLUMNS=140 LINES=$h distrofetch --no-color --no-clear | wc -l)"
+            if [ "$n" -gt $((h - 1)) ]; then
+              echo "at LINES=$h the dashboard emitted $n lines and did not fit" >&2
+              exit 1
+            fi
+          done
+
+          # Clearing the screen writes an escape sequence, and this is not a terminal.
+          if COLUMNS=140 distrofetch --no-color | grep -q '\[2J'; then
+            echo "screen-clear escape reached a pipe" >&2
+            exit 1
+          fi
 
           # --- memory modules -----------------------------------------------------
           # Unprivileged runs must explain themselves rather than printing "unknown",

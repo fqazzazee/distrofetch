@@ -336,7 +336,22 @@ _hw_pci_vendor_fallback() {
 # pci.ids is 1.6 MB and roughly 25 000 lines, so it is never read line by line in the
 # shell. sed extracts the one vendor block and grep picks the device out of it — both
 # in C, both over a file the kernel has in page cache anyway. Measured at ~15 ms.
+# Resolved names, keyed vendor:device. The dashboard is built more than once when it
+# has to be condensed to fit the terminal, and each miss costs a sed over 1.6 MB.
+#
+# -g because `declare -A` is *local* when the declaring statement runs inside a
+# function, and the tests source this file from bats' setup(). Without it the array
+# disappears when setup returns, and the next assignment creates an indexed array whose
+# subscript "10de:2684" is then evaluated as arithmetic.
+declare -gA _hw_pci_memo
+
 hwdata_pci_name() {
+  local memo_key="$1:$2"
+  if [ -n "${_hw_pci_memo[$memo_key]:-}" ]; then
+    printf '%s' "${_hw_pci_memo[$memo_key]}"
+    return 0
+  fi
+
   # Initialised, not merely declared: `local x` leaves x *unset*, and under `set -u`
   # reading it is a fatal error. Every assignment below is inside a conditional, so on
   # a system with no pci.ids none of them run — which is two of the three CI images.
@@ -369,13 +384,16 @@ hwdata_pci_name() {
   short="$(_hw_pci_vendor_fallback "$vendor")"
   [ -n "$short" ] && vname="$short"
 
+  local result
   if [ -n "$vname" ] && [ -n "$dname" ]; then
-    printf '%s %s' "$vname" "$dname"
+    result="$vname $dname"
   elif [ -n "$vname" ]; then
-    printf '%s [%s:%s]' "$vname" "$vendor" "$device"
+    result="$vname [$vendor:$device]"
   else
-    printf '[%s:%s]' "$vendor" "$device"
+    result="[$vendor:$device]"
   fi
+  _hw_pci_memo[$memo_key]="$result"
+  printf '%s' "$result"
 }
 
 # --- logos -----------------------------------------------------------------
