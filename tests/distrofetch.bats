@@ -39,6 +39,26 @@ setup() {
   [ "$status" -eq 2 ]
 }
 
+@test "--duration 0 is accepted and prints the report" {
+  run "$DF" --duration 0 --no-color
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"OS:"* ]]
+}
+
+@test "the help text documents 0 as the default duration" {
+  run "$DF" --help
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"default: 0"* ]]
+}
+
+# A non-zero duration must still be inert off a terminal — this is what keeps the
+# animation out of pipes, cron, and CI logs regardless of flags.
+@test "a non-zero duration still emits no escapes when stdout is not a terminal" {
+  run "$DF" --duration 5
+  [ "$status" -eq 0 ]
+  [[ "$output" != *$'\033'* ]]
+}
+
 @test "the report runs clean and labels every field" {
   run "$DF" --no-color
   [ "$status" -eq 0 ]

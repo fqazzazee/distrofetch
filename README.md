@@ -48,7 +48,8 @@ x86_64. Linux only — the probes read `/proc`, which macOS and the BSDs do not 
 $ distrofetch
 ```
 
-The glyphs fall for two seconds, then:
+The report prints immediately. The animation is opt-in — `distrofetch -d 2` rains glyphs
+for two seconds first, then settles into the same report:
 
 ```console
 $ distrofetch --no-color
@@ -64,20 +65,25 @@ CPU:       13th Gen Intel(R) Core(TM) i7-1360P (16)
 Memory:    6.9 GiB / 15.2 GiB
 ```
 
-The animation is skipped automatically whenever stdout is not a terminal, so piping and
-redirecting are always safe — no escape sequences end up in your file.
+Both the animation and color switch off automatically whenever stdout is not a terminal,
+so piping and redirecting are always safe — no escape sequences end up in your file. There
+is no `--color=always` override; if you want color through a pager, ask for one.
 
 ## Options
 
 | Option | Default | Description |
 |---|---|---|
-| `-n`, `--no-rain` | off | Skip the animation, print the report only |
+| `-d`, `--duration N` | `0` | Seconds of rain before the report settles; `0` means none |
+| `-n`, `--no-rain` | | Skip the animation — the default, kept for explicitness |
 | `-c`, `--no-color` | off | Disable ANSI color; implies `--no-rain` |
-| `-d`, `--duration N` | `2` | Seconds of rain before the report settles |
 | `-v`, `--version` | | Print the version and exit |
 | `-h`, `--help` | | Print help and exit |
 
 Exit status is `0` on success and `2` on a usage error.
+
+The animation is off by default because the common case is a shell startup file, where two
+seconds is a long time to wait for your prompt. Alias `distrofetch -d 2` if you want the
+full effect on demand.
 
 ## Development
 

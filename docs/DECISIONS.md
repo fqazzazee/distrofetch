@@ -8,6 +8,34 @@ decision, it is a preference.
 
 ---
 
+## 2026-08-01 — The animation is opt-in, default duration 0
+
+**Status:** accepted
+
+**Context:** Resolves the first open question in SPEC.md. The rain is the reason the tool
+exists, but the place a fetch tool actually runs is a shell startup file, once per new
+terminal.
+
+**Decision:** `--duration` defaults to `0`, which skips the animation. `distrofetch -d 2`
+gets the full effect.
+
+**Alternatives:** Defaulting to 2 seconds, which shows off the feature and matches what
+someone expects after reading the README. Rejected because a two-second delay on every
+new shell is the kind of thing people fix by uninstalling rather than by reading `--help`.
+Also considered a `--rain` flag as a friendlier alias for `-d 2`; left out because one way
+to set the duration is enough until someone asks.
+
+**Consequences:** The headline feature is invisible unless the user reads the help or the
+README, so both now lead with `-d 2`. `--no-rain` is now the default behavior rather than
+an override — kept because it is explicit and costs one line, but it is dead weight if a
+future version grows a config file that could turn rain on persistently.
+
+Note the implementation constraint this creates: a duration of `0` has to skip
+`render_rain` entirely rather than call it with `0`, because that function clears the
+screen on the way out.
+
+---
+
 ## 2026-08-01 — Bash rather than Go
 
 **Status:** accepted

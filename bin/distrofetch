@@ -45,21 +45,27 @@ distrofetch $DISTROFETCH_VERSION — matrix-styled system information
 Usage: distrofetch [options]
 
 Options:
-  -n, --no-rain      skip the falling-glyph animation, print the report only
+  -d, --duration N   seconds of rain before the report settles (default: 0)
+  -n, --no-rain      skip the animation; the default, kept for explicitness
   -c, --no-color     disable ANSI color (implies --no-rain)
-  -d, --duration N   seconds of rain before the report settles (default: 2)
   -v, --version      print version and exit
   -h, --help         print this help and exit
 
-The animation is skipped automatically when stdout is not a terminal, so
-piping or redirecting output is always safe.
+The animation is off by default — this runs in shell startup files, where two
+seconds is a long time to wait. Turn it on with -d:
+
+  distrofetch -d 2
+
+Both the animation and color switch off automatically when stdout is not a
+terminal, so piped and redirected output is always plain text.
 
 Exit status: 0 on success, 2 on a usage error.
 EOF
 }
 
 main() {
-  local rain=1 color=1 duration=2
+  # Rain is opt-in: a duration of 0 means no animation at all.
+  local rain=1 color=1 duration=0
 
   while [ $# -gt 0 ]; do
     case "$1" in
@@ -94,9 +100,17 @@ main() {
     '' | *[!0-9]*) die "--duration must be a whole number of seconds" ;;
   esac
 
-  # Nothing to animate into if stdout is a pipe, a file, or a CI log.
+  # A zero duration must skip render_rain entirely rather than call it with 0 — it
+  # clears the screen on the way out, which would be a surprising thing to do by default.
+  if [ "$duration" -eq 0 ]; then
+    rain=0
+  fi
+
+  # Nothing to animate into if stdout is a pipe, a file, or a CI log — and nothing that
+  # would render color, either. Both go off together so redirected output is plain text.
   if [ ! -t 1 ]; then
     rain=0
+    color=0
   fi
 
   render_init "$color"

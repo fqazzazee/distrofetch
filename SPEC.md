@@ -28,9 +28,14 @@ fresh install and wants the specs without installing a toolchain first.
    model with logical core count, and memory used/total.
 2. Every probe returns exactly one line; a probe that cannot determine its fact returns
    the literal string `unknown` rather than failing or printing nothing.
-3. Animate falling glyphs before the report, for a duration the user controls.
-4. Detect that stdout is not a terminal and skip the animation and cursor control
-   automatically, so piped and redirected output contains no escape sequences.
+3. Animate falling glyphs before the report, for a duration the user controls. The
+   animation is opt-in: the default duration is `0`, which skips it entirely. A duration
+   of `0` must bypass the animation code rather than run it for zero seconds, since it
+   clears the screen on exit.
+4. Detect that stdout is not a terminal and disable the animation, the cursor control,
+   **and color** automatically, so piped and redirected output contains no escape
+   sequences. Skipping only the animation is not enough — color alone still writes
+   escapes into the file.
 5. Disable all color on request, producing plain ASCII output.
 6. Exit `0` on success and `2` on a usage error, writing usage errors to stderr.
 7. Select the package-count backend from what is present on the system: pacman, then
@@ -41,8 +46,11 @@ fresh install and wants the specs without installing a toolchain first.
 ## UX
 
 ```
-distrofetch [-n|--no-rain] [-c|--no-color] [-d|--duration N] [-v|--version] [-h|--help]
+distrofetch [-d|--duration N] [-n|--no-rain] [-c|--no-color] [-v|--version] [-h|--help]
 ```
+
+Bare `distrofetch` prints the report and nothing else. `distrofetch -d 2` is the full
+effect.
 
 Report format — a two-line header, then one aligned `Label: value` per fact:
 
@@ -144,13 +152,12 @@ on every push. <!-- assumed --> arm64 is expected to work but is not tested.
 - [ ] `make install PREFIX=$(mktemp -d)` then running the installed copy from outside the
       source tree works
 - [ ] Ctrl-C during the animation restores the cursor and leaves the terminal usable
+- [ ] Bare `distrofetch` prints the report with no animation and no screen clear
 - [ ] `make dist` produces a tarball plus a checksum that `sha256sum -c` verifies
 - [ ] Total script size stays under 500 lines across `bin/` and `lib/`
 
 ## Open questions
 
-- Should the rain duration default to 2 seconds, or to 0 with the animation opt-in? Two
-  seconds is a long time for something in a shell rc file. <!-- assumed -->
 - Is a package count worth the three code paths it costs? It is the only probe that
   differs per distro, and therefore the only reason the smoke matrix earns its runtime.
 - arm64: claim support and test it under QEMU, or stay silent about it?
