@@ -8,6 +8,41 @@ decision, it is a preference.
 
 ---
 
+## 2026-08-02 — Security CI: the workflows and the history, not the code
+
+**Status:** accepted — amends "Minimal CI, but the distro smoke matrix stays"
+
+**Context:** Hardened CI was offered during scaffolding and declined, and secret scanning
+was dropped on the grounds that the project handles no credentials. The maintainer has
+now asked for security checks. What is actually attackable here is narrow: no runtime
+dependencies, no network calls, no credentials in the program itself.
+
+**Decision:** A `Security` workflow running zizmor and actionlint over the workflows, and
+gitleaks over the history, plus two assertions of the repository's own invariants — every
+workflow declares its permissions, and only the release job holds `contents: write`.
+Dependabot keeps the pinned actions current.
+
+**Alternatives:** CodeQL — still rejected, and now for a checked reason rather than a
+remembered one: it has no Bash analyser, so it would cost runtime and report nothing.
+Secret scanning was previously dropped as unnecessary; that reasoning was backwards. A
+project that handles no credentials is precisely one where an accidental credential would
+go unnoticed, because nobody is looking.
+
+**Consequences:** The first run of these tools found 24 issues in workflows I had written
+and reviewed: seven unpinned actions, five checkouts persisting credentials into
+`.git/config`, and a third-party action inside the only job holding a write token. All
+are now fixed — actions pinned by commit hash, `persist-credentials: false` everywhere,
+and the release published with `gh release` instead of an action.
+
+Two findings are suppressed with the reason in the file: the smoke matrix uses floating
+distro tags deliberately, since pinning them to digests would mean testing three
+snapshots that can never change, which is the opposite of what that job is for.
+
+Pinning by hash means nothing updates without a commit — including a security fix — so
+Dependabot is not optional here, it is the other half of the decision.
+
+---
+
 ## 2026-08-02 — The generation table is checked against the vendors, and says when
 
 **Status:** accepted — amends "Generation currency, with the comparison basis named"

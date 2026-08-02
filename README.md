@@ -1,316 +1,154 @@
 # distrofetch
 
 A full-screen system dashboard for Linux — distribution support status, processor
-lineage, memory modules, and firmware, beside your distro's logo in ASCII.
+lineage, memory, disks, graphics, network, and firmware, beside your distro's logo in
+ASCII.
 
 [![CI](https://github.com/fqazzazee/distrofetch/actions/workflows/ci.yaml/badge.svg)](https://github.com/fqazzazee/distrofetch/actions/workflows/ci.yaml)
 [![Smoke test (distros)](https://github.com/fqazzazee/distrofetch/actions/workflows/smoke-distros.yaml/badge.svg)](https://github.com/fqazzazee/distrofetch/actions/workflows/smoke-distros.yaml)
-
-## What it does
-
-Prints a dashboard of what a Linux machine actually is — the distribution and how long it
-is supported for, the processor down to its microarchitecture and generation, the memory
-modules with their speeds and manufacturers, the disks with their PCIe links, the
-graphics and network adapters, the USB and Thunderbolt controllers with their link
-rates, and the board and its firmware — beside an ASCII logo of the running distro.
-
-It clears the screen and sizes itself to the terminal, so what you get is one
-screenshot rather than something you have to scroll.
-
-It reads `/etc/os-release`, `/proc`, `/sys`, and your package manager's database. No
-network calls, no writes, and no root.
+[![Security](https://github.com/fqazzazee/distrofetch/actions/workflows/security.yaml/badge.svg)](https://github.com/fqazzazee/distrofetch/actions/workflows/security.yaml)
 
 ```console
 $ distrofetch
-distrofetch 0.1.0                                                                                                 tesla@fadis-zenbook14
-───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+distrofetch 0.1.0                                                                              tesla@fadis-zenbook14
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
-       _____    ┌─ SYSTEM ────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
-      /   __)\  │ OS        Fedora Linux 44 (Workstation Edition)                                                                     │
-      |  /  \ \ │ Kernel    Linux 7.1.5-201.fc44.x86_64                                                                               │
-   ___|  |__/ / │ Arch      x86_64                                                                                                    │
-  / (_    _)_/  │ Uptime    3d 1h 43m                                                                                                 │
- / /  |  |      │ Shell     bash                                                                                                      │
- \ \__/  |      │ Packages  2812 (rpm)                                                                                                │
-  \(_____/      └─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
-                ┌─ DISTRIBUTION ──────────────────────────────────────────────────────────────────────────────────────────────────────┐
-                │ ID        fedora                                                                                                    │
-                │ Version   44                                                                                                        │
-                │ Codename  none                                                                                                      │
-                │ Released  unknown                                                                                                   │
-                │ Support   supported until 2027-05-19 (289 days)                                                                     │
-                └─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
-                ┌─ PROCESSOR ─────────────────────────────────────────────────────────────────────────────────────────────────────────┐
-                │   _       _       _   Model      13th Gen Intel(R) Core(TM) i7-1360P (15)                                           │
-                │  (_)_ __ | |_ ___| |  Vendor     Intel                                                                              │
-                │  | | '_ \| __/ _ \ |  Generation 13th Gen Core, released 2022                                                       │
-                │  | | | | | ||  __/ |  Currency   3 generations behind Core Ultra Series 2 (2024)                                    │
-                │  |_|_| |_|\__\___|_|  Micro-arch Raptor Lake, launched 2023, Intel 7                                                │
-                │                       Signature  family 6, model 186, stepping 2, ucode 0x6134                                      │
-                │                       Topology   12 cores / 16 threads                                                              │
-                │                       Clock      0.8 GHz now, 5.0 GHz max                                                           │
-                │                       Cache      48K L1d, 32K L1i, 1280K L2, 18432K L3                                              │
-                │                       Features   AVX2, AES-NI, SHA-NI, VT-x                                                         │
-                └─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
-                ┌─ MEMORY ────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
-                │ RAM       5.8 GiB / 15.2 GiB                                                                                        │
-                │ Channels  4 channels across 2 controllers, 8 slots                                                                  │
-                │ Swap      0.6 GiB / 7.9 GiB                                                                                         │
-                │ Modules   needs root: run sudo distrofetch                                                                          │
-                └─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
-                ┌─ STORAGE ───────────────────────────────────────────────────────────────────────────────────────────────────────────┐
-                │ nvme0n1   1.0 TB NVMe WD PC SN560 SDDPNQE-1T00-1102 - PCIe Gen 4 x4 (4 lanes)                                       │
-                └─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
-                ┌─ GRAPHICS ──────────────────────────────────────────────────────────────────────────────────────────────────────────┐
-                │ GPU       Intel Raptor Lake-P [Iris Xe Graphics] (i915)                                                             │
-                └─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
-                ┌─ NETWORK ───────────────────────────────────────────────────────────────────────────────────────────────────────────┐
-                │ wlo1      Intel Raptor Lake PCH CNVi WiFi (iwlwifi) - up, CNVi, generation set by the RF module not the PCI ID      │
-                │ Virtual   br-df56d9872e83 (bridge, down) docker0 (bridge, down) lo (loopback, unknown) tailscale0 (tunnel, unknown) │
-                └─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
-                ┌─ PERIPHERALS ───────────────────────────────────────────────────────────────────────────────────────────────────────┐
-                │ USB         fastest 20 Gbps; root ports are per controller, not sockets                                             │
-                │   USB 2.0 (480 Mbps): 2 controllers, 13 root ports                                                                  │
-                │   USB 3.2 Gen 2x2 (20 Gbps): 1 controller, 3 root ports                                                             │
-                │   USB 3.2 Gen 2 (10 Gbps): 1 controller, 4 root ports                                                               │
-                │ Thunderbolt domain0: Thunderbolt 4 / USB4 (40 Gbps), INTEL Gen12                                                    │
-                │   security: user - connections need approval; IOMMU DMA protection on                                               │
-                │ Thunderbolt domain1: Thunderbolt 4 / USB4 (40 Gbps), INTEL Gen12                                                    │
-                │   security: user - connections need approval; IOMMU DMA protection on                                               │
-                └─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
-                ┌─ MACHINE ───────────────────────────────────────────────────────────────────────────────────────────────────────────┐
-                │ Model     ASUSTeK COMPUTER INC. Zenbook Flip UP3404VA_UP3404VA                                                      │
-                │ Board     ASUSTeK COMPUTER INC. UP3404VA                                                                            │
-                │ Firmware  UP3404VA.301 (2023-05-11)                                                                                 │
-                └─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+       _____    ┌─ SYSTEM ─────────────────────────────────────────────────────────────────────────────────────────┐
+      /   __)\  │ OS        Fedora Linux 44 (Workstation Edition)                                                  │
+      |  /  \ \ │ Kernel    Linux 7.1.5-201.fc44.x86_64                                                            │
+   ___|  |__/ / │ Arch      x86_64                                                                                 │
+  / (_    _)_/  │ Uptime    3d 2h 35m                                                                              │
+ / /  |  |      │ Shell     bash                                                                                   │
+ \ \__/  |      │ Packages  2812 (rpm)                                                                             │
+  \(_____/      └──────────────────────────────────────────────────────────────────────────────────────────────────┘
+                ┌─ DISTRIBUTION ───────────────────────────────────────────────────────────────────────────────────┐
+                │ ID        fedora                                                                                 │
+                │ Version   44                                                                                     │
+                │ Codename  none                                                                                   │
+                │ Released  unknown                                                                                │
+                │ Support   supported until 2027-05-19 (289 days)                                                  │
+                └──────────────────────────────────────────────────────────────────────────────────────────────────┘
+                ┌─ PROCESSOR ──────────────────────────────────────────────────────────────────────────────────────┐
+                │   _       _       _   Model      13th Gen Intel(R) Core(TM) i7-1360P (16)                        │
+                │  (_)_ __ | |_ ___| |  Vendor     Intel                                                           │
+                │  | | '_ \| __/ _ \ |  Generation 13th Gen Core, released 2022                                    │
+                │  | | | | | ||  __/ |  Currency   4 generations behind Core Ultra Series 3 (2026)                 │
+                │  |_|_| |_|\__\___|_|  Micro-arch Raptor Lake, launched 2023, Intel 7                             │
+                │                       Signature  family 6, model 186, stepping 2, ucode 0x6134                   │
+                │                       Topology   12 cores / 16 threads (14 online)                               │
+                │                       Clock      0.4 GHz now, 5.0 GHz max                                        │
+                │                       Cache      48K L1d, 32K L1i, 1280K L2, 18432K L3                           │
+                │                       Features   AVX2, AES-NI, SHA-NI, VT-x                                      │
+                └──────────────────────────────────────────────────────────────────────────────────────────────────┘
+                ┌─ MEMORY ─────────────────────────────────────────────────────────────────────────────────────────┐
+                │ RAM       6.0 GiB / 15.2 GiB                                                                     │
+                │ Channels  4 channels across 2 controllers, 8 slots                                               │
+                │ Swap      0.6 GiB / 7.9 GiB                                                                      │
+                │ Modules   needs root: run sudo distrofetch                                                       │
+                └──────────────────────────────────────────────────────────────────────────────────────────────────┘
+                ┌─ STORAGE ────────────────────────────────────────────────────────────────────────────────────────┐
+                │ nvme0n1   1.0 TB NVMe WD PC SN560 SDDPNQE-1T00-1102 - PCIe Gen 4 x4 (4 lanes)                    │
+                └──────────────────────────────────────────────────────────────────────────────────────────────────┘
+                ┌─ GRAPHICS ───────────────────────────────────────────────────────────────────────────────────────┐
+                │ GPU       Intel Raptor Lake-P [Iris Xe Graphics] (i915)                                          │
+                └──────────────────────────────────────────────────────────────────────────────────────────────────┘
+                ┌─ NETWORK ────────────────────────────────────────────────────────────────────────────────────────┐
+                │ wlo1      Intel Raptor Lake PCH CNVi WiFi (iwlwifi) - up, CNVi, generation set by the RF module  │
+                │           not the PCI ID                                                                         │
+                │ Virtual   br-df56d9872e83 (bridge, down) docker0 (bridge, down) lo (loopback, unknown)           │
+                │           tailscale0 (tunnel, unknown)                                                           │
+                └──────────────────────────────────────────────────────────────────────────────────────────────────┘
+                ┌─ PERIPHERALS ────────────────────────────────────────────────────────────────────────────────────┐
+                │ USB         fastest 20 Gbps; root ports are per controller, not sockets                          │
+                │   USB 2.0 (480 Mbps): 2 controllers, 13 root ports                                               │
+                │   USB 3.2 Gen 2x2 (20 Gbps): 1 controller, 3 root ports                                          │
+                │   USB 3.2 Gen 2 (10 Gbps): 1 controller, 4 root ports                                            │
+                │ Thunderbolt domain0: Thunderbolt 4 / USB4 (40 Gbps), INTEL Gen12                                 │
+                │   security: user - connections need approval; IOMMU DMA protection on                            │
+                │ Thunderbolt domain1: Thunderbolt 4 / USB4 (40 Gbps), INTEL Gen12                                 │
+                │   security: user - connections need approval; IOMMU DMA protection on                            │
+                └──────────────────────────────────────────────────────────────────────────────────────────────────┘
+                ┌─ MACHINE ────────────────────────────────────────────────────────────────────────────────────────┐
+                │ Model     ASUSTeK COMPUTER INC. Zenbook Flip UP3404VA_UP3404VA                                   │
+                │ Board     ASUSTeK COMPUTER INC. UP3404VA                                                         │
+                │ Firmware  UP3404VA.301 (2023-05-11)                                                              │
+                └──────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-Two panel columns when the terminal is wide enough, one when it is not, and a plain list
-below 56 columns. Nothing here costs wall-clock time — it prints immediately, which is
-the point for something you run from a shell startup file.
-
-It is Bash and coreutils, with no runtime dependencies: it runs on the minimal container
-or the freshly-installed box where you have not yet installed anything.
-
-## What it can tell you that `uname -a` cannot
-
-- **Whether your distribution is still supported**, and for how long. Taken from
-  `SUPPORT_END=` in `/etc/os-release` where the distro ships it — Fedora, RHEL, and the
-  RHEL rebuilds do — and from a bundled table otherwise. An expired release is coloured
-  red, one within 90 days amber.
-- **What your CPU actually is, and how old.** "13th Gen Intel Core i7-1360P" is a
-  marketing string; `family 6, model 186` is Raptor Lake, launched 2023 on Intel 7. The
-  same silicon ships under several names, so the lookup keys on the family/model pair.
-- **How far behind the current generation you are** — `13th Gen Core, released 2022` and
-  `3 generations behind Core Ultra Series 2 (2024)`, beside an Intel or AMD mark. The
-  generation being compared against is named rather than just counted, because the count
-  is only as current as the bundled table: naming the basis is what lets you notice the
-  table has gone stale. Xeon and EPYC parts are reported as not sitting on the consumer
-  ladder rather than being placed on one.
-
-  Intel's 13th and 14th Gen desktop parts are the same silicon and share a family/model
-  pair, so the brand string wins where it carries a generation marker — otherwise every
-  14th Gen chip would report as a generation older than it is.
-- **Real core counts.** Read from `/sys/devices/system/cpu/present` rather than by
-  counting `/proc/cpuinfo` blocks, which lists only *online* CPUs — so on a laptop that
-  parks cores, the naive count changes between runs. Offline cores are noted, not hidden.
-- **Your memory modules**: size, type, form factor, rated *and* configured speed, and
-  manufacturer. The gap between rated and configured is how you notice XMP is off.
-- **How many memory channels you are running**, from EDAC — which is world-readable,
-  unlike the SMBIOS tables that carry the same topology behind mode `0400`. Single
-  versus dual channel is the largest memory-performance fact about a machine and it is
-  invisible everywhere else.
-- **What your NVMe drive is actually running at.** `PCIe Gen 4 x4 (4 lanes)` — and when
-  it has negotiated below what it and the slot can do, `PCIe Gen 3 x2 (2 lanes), capable
-  of Gen 4 x4`. A Gen4 drive
-  in a Gen3 slot runs at half throughput and nothing else on the system tells you.
-- **Which Wi-Fi generation your card is** — `Wi-Fi 6E`, `Wi-Fi 7` — read from the device
-  name, because neither sysfs nor an unprivileged `ethtool` will say. For Intel CNVi
-  parts it reports that the generation *cannot* be known from the PCI ID rather than
-  guessing: CNVi puts the wireless MAC in the chipset and the radio in a separate
-  module, so two machines with the same ID can differ.
-- **Every interface, including the ones with nothing plugged in.** A port with no cable
-  says `no carrier (nothing plugged in)` rather than being filtered out — a list that has
-  already dropped an interface cannot answer "where did my ethernet go". Bridges,
-  tunnels, loopback, and container veths are listed too, on one muted row.
-- **Rated versus negotiated ethernet speed**, where the device name states a rating. The
-  gap between them is a bad cable or a switch port stuck at 100 Mbps, and neither number
-  identifies that alone.
-- **Which graphics adapter is actually driving the panel.** A laptop with switchable
-  graphics has two, and they are reported separately — the integrated one as `GPU`, the
-  discrete one as `3D`, which is how the PCI class distinguishes them.
-- **What your USB ports can actually do.** Controllers are grouped by link rate and
-  named from the rate, because USB 3.2 Gen 1, Gen 2, and Gen 2x2 all report version
-  `3.10` in sysfs and differ only in speed.
-- **Whether you have Thunderbolt, of which generation, and under what security policy** —
-  including whether IOMMU DMA protection is on, and any attached device's authorisation
-  state. `security: none` means every device gets PCIe access the moment it is plugged
-  in, so it is spelled out rather than printed bare.
-
-Two things are deliberately *not* claimed. There is **no USB or Thunderbolt port count**:
-root-hub port totals are per controller, and one USB-C socket is wired to a 2.0 root hub
-and a 3.x one at the same time, so the sum is routinely double the number of holes in the
-case. And the mapping from a Thunderbolt domain to a physical connector is board-specific
-and not exposed by the kernel, so any number there would be a guess dressed as a
-measurement.
-
-Device names come from `pci.ids` where the `hwdata` package is installed, and from a
-small bundled vendor table otherwise — minimal containers do not ship 1.6 MB of device
-names, so the fallback is the normal case there, and degrades to `Intel [8086:a7a0]`
-rather than to nothing.
-
-Module detail comes from the raw SMBIOS tables, which the kernel exposes at mode `0400`.
-An unprivileged run says so and names the command that would show them:
-
-```
-│ Modules   needs root: run sudo distrofetch                          │
-```
-
-Run it privileged and that line becomes the modules themselves (shown here against the
-test fixtures, since the author's laptop has two soldered sticks and less to say):
-
-```console
-# distrofetch
-                ┌─ MEMORY ───────────────────────────────────────────────────────────────────────────────────────────────────────┐
-                │ RAM       6.6 GiB / 15.2 GiB                                                                                   │
-                │ Swap      0.4 GiB / 7.9 GiB                                                                                    │
-                │ DIMM 0: 16 GiB DDR5 SODIMM @ 5200 MT/s (rated 5600) - SK Hynix (HMCG78AGBSA095N)                               │
-                │ DIMM_A1: 32 GiB DDR4 DIMM @ 3200 MT/s - Corsair (CMK32GX4M2)                                                   │
-                │ DIMM_B1: 16 MiB DDR3 DIMM @ 1600 MT/s - Micron (MT8JTF)                                                        │
-                │ DIMM 1: 8 GiB DDR5 SODIMM @ 5200 MT/s (rated 5600)                                                             │
-                │ Slots     4 of 6 populated                                                                                     │
-```
-
-No **MAC address** is ever read, for the same reason: it is a durable, globally unique
-identifier for the machine, and this output exists to be screenshotted. The smoke tests
-assert that every real interface's MAC is absent from the output on all three tested
-distros.
-
-**distrofetch never asks for privilege and never needs it.** Everything else works
-unprivileged; `sudo distrofetch` just fills in that one panel. The module *serial number*
-is never read at all — it is a durable hardware identifier, and this output exists to be
-screenshotted.
-
-## It scales to the window, and never hides a fact
-
-Panels are as wide as their content and never wider than the window. **Nothing is ever
-truncated** — a value too long for its panel wraps onto the next line, indented under
-the value column. A clipped `Intel Raptor Lake-P [Iris Xe Grap...` hides the part that
-identifies the thing, and there is no way to get it back.
-
-That means the dashboard is as tall as it needs to be, and the terminal scrolls. If you
-would rather it fit:
-
-```bash
-distrofetch --fit        # drop detail until it fits the height
-distrofetch --no-clear   # draw in place, leaving scrollback alone
-```
-
-`--fit` drops the rows that restate something (signature, cache, board), then pairs
-panels two across, then drops the logo — in that order, strictly decreasing in
-information. It will not truncate to get there, so a condensed panel is *taller* than a
-clipped one used to be and roughly 35 lines is as small as nine panels go.
-
-On a window wide enough for two full-width columns, panels pair automatically — no
-narrowing, no wrapping, half the height.
-
-It will not change font size to fit: terminals have no portable way to do that. `DECDWL`
-and `DECDHL` exist in the VT100 repertoire, but kitty, alacritty, and most modern
-emulators ignore them, and where they work they halve the columns on that line and break
-every alignment guarantee in the layout. There is no control for a *smaller* font even in
-principle.
-
-## Colour
-
-Two themes. `vivid` is the default: a distinct hue per panel heading so the eye can find
-`STORAGE` without reading the others, a steel-blue key column, near-white values, and
-green/amber/red reserved for things that carry meaning — an expired release, a
-disconnected port.
-
-```bash
-distrofetch --theme=matrix   # the original all-green look
-```
-
-The glyph rain keeps its greens under either theme. It is the one part of this program
-that is a reference rather than an interface.
-
-## Progress
-
-Probing takes long enough to look like a hang — the package-manager query alone is
-hundreds of milliseconds on a machine with thousands of packages. distrofetch says what
-it is doing while it works, then clears the line:
-
-```
-  reading installed packages...
-```
-
-Only on a terminal, and only when the screen is going to be cleared anyway, so it can
-never end up in something you are piping. `--quiet` turns it off.
-
-## Logos## Logos
-
-Roughly twenty distributions have their own art, and a derivative borrows its parent's
-via `ID_LIKE`. Anything unrecognised gets a generic penguin.
-
-```bash
-distrofetch --list-logos      # what is bundled
-distrofetch --logo=gentoo     # wear someone else's
-distrofetch --no-logo         # panels only
-```
-
-`--no-logo` also removes the Intel/AMD mark from the processor panel — it is the switch
-for all art, not just the distro column. That mark drops out on its own once the panel is
-too narrow to hold both it and the values, because a legible fact beats a legible logo.
-
-Logos are strictly ASCII, at most 20 rows and 30 columns (vendor marks: 10 and 24). That
-is not aesthetic conservatism: `${#}` counts bytes rather than characters outside a UTF-8
-locale, and an ASCII logo is the only kind whose column width is the same everywhere.
+Bash and coreutils, no runtime dependencies. It reads `/etc/os-release`, `/proc`, `/sys`,
+and your package manager's database — no network calls, no writes, no root.
 
 ## Install
 
 ```bash
 git clone https://github.com/fqazzazee/distrofetch.git
-cd distrofetch
-sudo make install            # /usr/local by default
+cd distrofetch && sudo make install      # /usr/local by default
 ```
 
-Or from a release tarball:
+`make install PREFIX=~/.local` to put it elsewhere, `sudo make uninstall` to remove it.
+Release tarballs carry a `.sha256` — check it before extracting.
 
-```bash
-curl -fsSLO https://github.com/fqazzazee/distrofetch/releases/latest/download/distrofetch-0.1.0.tar.gz
-sha256sum -c distrofetch-0.1.0.tar.gz.sha256
-tar xzf distrofetch-0.1.0.tar.gz
-cd distrofetch-0.1.0 && sudo make install
-```
+**Requires** Bash 5.0+ and coreutils. Linux only; the probes read `/proc`.
 
-Install somewhere else with `make install PREFIX=~/.local`, and remove it with
-`sudo make uninstall`.
+## What it tells you that `uname -a` cannot
 
-**Requires:** Bash 5.0+ and coreutils. Tested on Arch, Debian stable, and Fedora,
-x86_64. Linux only — the probes read `/proc`, which macOS and the BSDs do not have.
+- **Whether your distribution is still supported.** From `SUPPORT_END=` in
+  `/etc/os-release` where the distro ships it, and a bundled table otherwise. Expired
+  renders red, within 90 days amber.
+- **What your CPU actually is, and how old.** `family 6, model 186` is Raptor Lake,
+  2023 — the marketing name doesn't say. Plus how many generations behind the current
+  one you are, naming what it compared against.
+- **What your NVMe drive is running at.** `PCIe Gen 4 x4 (4 lanes)`, and when it has
+  negotiated down, `PCIe Gen 3 x2 (2 lanes), capable of Gen 4 x4`.
+- **How many memory channels**, from EDAC — single versus dual channel is invisible
+  everywhere else.
+- **Your memory modules**: size, type, rated *and* configured speed, manufacturer. The
+  gap between the two speeds is how you notice XMP is off.
+- **Which Wi-Fi generation** your card is. For Intel CNVi parts it says the generation
+  *cannot* be known from the PCI ID rather than guessing — the radio is a separate
+  module from the chip the ID names.
+- **Every network interface**, including ones with nothing plugged in.
+- **Real core counts**, from `/sys/devices/system/cpu/present` rather than by counting
+  `/proc/cpuinfo` blocks, which lists only *online* CPUs.
 
-## Use
+## Privacy
 
-```console
-$ distrofetch
-```
+This output is designed to be screenshotted, so **no stable hardware identifier is ever
+read**: not DIMM or drive serials, not MAC addresses. Those paths are never opened, so no
+change to the formatting can leak one. Tests assert it, on every supported distro.
 
-The report prints immediately. The animation is opt-in:
+Memory module detail lives in SMBIOS tables the kernel exposes at mode `0400`. An
+unprivileged run says so and names the command that would show them; `sudo distrofetch`
+fills in that one panel. **distrofetch never asks for privilege and never needs it.**
 
-```console
-$ distrofetch -d 2
-```
+## Options
 
-That gives you two seconds of rain — columns of glyphs falling with a white leading
-character and a tail that fades through five greens — after which the banner assembles a
-row at a time and each value resolves out of the noise into the real thing.
+| Option | Default | Description |
+|---|---|---|
+| `--no-art` | | Plain `Label: value` lines: no panels, no logo |
+| `--no-clear` | | Draw in place instead of clearing the screen |
+| `--fit` | | Drop detail until it fits the terminal height |
+| `--theme=NAME` | `vivid` | `vivid` or `matrix` |
+| `--logo=NAME` | auto | Force a distro logo; `--list-logos` prints them |
+| `--no-logo` | | No logo art anywhere |
+| `-d`, `--duration N` | `0` | Seconds of matrix rain first; `0` means none |
+| `--color=WHEN` | `auto` | `always`, `never`, or `auto` |
+| `-q`, `--quiet` | | No progress output while probing |
+| `-v`, `--version`, `-h`, `--help` | | |
 
-The rain runs on the alternate screen buffer, so whatever was in your terminal is still
-there when it finishes; the report then prints into your normal scrollback where it
-stays. Ctrl-C mid-animation puts everything back.
+Exit status is `0` on success and `2` on a usage error.
 
-`--no-art` gives you the bare lines, which is what you want if something is reading the
-output:
+**Nothing is ever truncated.** Panels size to their content and long values wrap; an
+ellipsis in this output would mean a fact was thrown away. That means it can be taller
+than your terminal — `--fit` trades detail for height if you would rather it fit.
+
+Animation and colour switch off automatically when stdout is not a terminal, so piping
+is safe by default.
+
+## Scripting against it
+
+Use `--no-art`: one fact per line, no frame, no logo. The smoke tests assert on all three
+tested distros that no part of the dashboard leaks into it.
 
 ```console
 $ distrofetch --no-art --no-color
@@ -319,17 +157,17 @@ tesla@fadis-zenbook14
 OS:        Fedora Linux 44 (Workstation Edition)
 Kernel:    Linux 7.1.5-201.fc44.x86_64
 Arch:      x86_64
-Uptime:    3d 1h 43m
+Uptime:    3d 2h 35m
 Packages:  2812 (rpm)
 Shell:     bash
 Released:  unknown
 Support:   supported until 2027-05-19 (289 days)
-CPU:       13th Gen Intel(R) Core(TM) i7-1360P (16)
-CPU gen:   13th Gen Core (2022), 3 behind Core Ultra Series 2
+CPU:       13th Gen Intel(R) Core(TM) i7-1360P (15)
+CPU gen:   13th Gen Core (2022), 4 behind Core Ultra Series 3
 Cores:     12 cores / 16 threads
-Clock:     0.8 GHz now, 5.0 GHz max
+Clock:     0.4 GHz now, 5.0 GHz max
 Cache:     48K L1d, 32K L1i, 1280K L2, 18432K L3
-Memory:    5.9 GiB / 15.2 GiB
+Memory:    6.0 GiB / 15.2 GiB
 Channels:  4 channels, 2 controllers, 8 slots
 Swap:      0.6 GiB / 7.9 GiB
 Disks:     nvme0n1 1.0 TB NVMe WD PC SN560 SDDPNQE-1T00-1102 PCIe Gen 4 x4 (4 lanes)
@@ -341,153 +179,41 @@ Machine:   ASUSTeK COMPUTER INC. Zenbook Flip UP3404VA_UP3404VA
 Firmware:  UP3404VA.301 (2023-05-11)
 ```
 
-Both the animation and color switch off automatically whenever stdout is not a terminal,
-so piping and redirecting are safe by default — no escape sequences end up in your file.
-When the consumer does understand ANSI, override it:
-
-```bash
-distrofetch --color=always | less -R
-```
-
-## Options
-
-| Option | Default | Description |
-|---|---|---|
-| `--logo=NAME` | auto | Force a specific distro logo |
-| `--no-logo` | | Dashboard without the logo column |
-| `--no-art` | | Plain `Label: value` lines: no panels, no logo |
-| `--no-clear` | | Draw in place instead of clearing the screen |
-| `--fit` | | Drop detail until the dashboard fits the terminal height |
-| `--theme=NAME` | `vivid` | `vivid` or `matrix` |
-| `-q`, `--quiet` | | No progress output while probing |
-| `--list-logos` | | Print the bundled logo names and exit |
-| `-d`, `--duration N` | `0` | Seconds of rain before the dashboard; `0` means none |
-| `-n`, `--no-rain` | | Skip the animation — the default, kept for explicitness |
-| `--color=WHEN` | `auto` | `always`, `never`, or `auto` (on for a terminal, off otherwise) |
-| `-c`, `--no-color` | | Alias for `--color=never` |
-| `-v`, `--version` | | Print the version and exit |
-| `-h`, `--help` | | Print help and exit |
-
-`--color` and `--logo` accept either form: `--logo=arch` or `--logo arch`.
-
-Exit status is `0` on success and `2` on a usage error.
-
-### Scripting against it
-
-Use `--no-art`. It is one fact per line with no frame and no logo, and no part of the
-dashboard leaks into it — the smoke tests assert that on all three tested distros.
-
-```console
-$ distrofetch --no-art --no-color
-tesla@fadis-zenbook14
-────────────────────────────────
-OS:        Fedora Linux 44 (Workstation Edition)
-Kernel:    Linux 7.1.5-201.fc44.x86_64
-Arch:      x86_64
-Uptime:    2d 19h 55m
-Packages:  2809 (rpm)
-Shell:     bash
-Released:  unknown
-Support:   supported until 2027-05-19 (289 days)
-CPU:       13th Gen Intel(R) Core(TM) i7-1360P (16)
-Cores:     12 cores / 16 threads
-Clock:     0.7 GHz now, 5.0 GHz max
-Cache:     48K L1d, 32K L1i, 1280K L2, 18432K L3
-Memory:    6.6 GiB / 15.2 GiB
-Swap:      0.4 GiB / 7.9 GiB
-Machine:   ASUSTeK COMPUTER INC. Zenbook Flip UP3404VA_UP3404VA
-Firmware:  UP3404VA.301 (2023-05-11)
-```
-
-Both the animation and color switch off automatically whenever stdout is not a terminal,
-so piping and redirecting are safe by default. When the consumer does understand ANSI:
-
-```bash
-distrofetch --color=always | less -R
-```
-
-`--color=always` never turns the animation on. The rain positions the cursor and switches
-screen buffers, so it needs a real terminal regardless of what color is set to.
-
-Terminal width comes from `COLUMNS` if it is set, then `tput cols`, then 80. Export
-`COLUMNS` if you are running under something that does not set it.
-
-### The animation
-
-Off by default, because the common case is a shell startup file where two seconds is a
-long time to wait for your prompt:
-
-```bash
-distrofetch -d 2
-```
-
-Columns of glyphs fall with a white leading character and a tail fading through five
-greens, on the alternate screen buffer — so whatever was in your terminal is still there
-when it finishes. Ctrl-C puts everything back. Outside a UTF-8 locale the glyphs fall
-back to ASCII, because Bash slices strings by byte there and half-width katakana would
-come apart into mojibake.
-
 ## Development
 
 ```bash
 make check-tools   # verify shellcheck, shfmt, and bats are installed
-make lint          # shellcheck
+make lint test     # shellcheck; bats
 make fmt-check     # shfmt, non-destructive
-make test          # bats
-make smoke         # run the real entry point against this machine
+make check-data    # compare the CPU table against Intel's and AMD's sites (needs network)
+make fixtures      # regenerate the SMBIOS and sysfs test fixtures
 ```
 
 | Module | Holds |
 |---|---|
 | `lib/detect.sh` | Probes. One line each, `unknown` rather than failure |
-| `lib/dmi.sh` | DMI text fields and the SMBIOS type-17 parser |
-| `lib/devices.sh` | Graphics, network, USB, and Thunderbolt enumeration |
+| `lib/devices.sh` | Graphics, network, USB, Thunderbolt, storage enumeration |
+| `lib/dmi.sh` | DMI fields and the SMBIOS type-17 parser |
 | `lib/hwdata.sh` | Lookups against the bundled reference tables |
-| `lib/render.sh` | Palette, animation, panel engine, dashboard layout |
+| `lib/render.sh` | Palette, animation, panel engine, layout |
 
-Detection is split from rendering so probes can be tested without a terminal.
-`hwdata.sh` is a different kind of thing again: it answers what the machine *cannot* know
-about itself — when a release shipped, when support ends, what a family/model pair is
-called.
+Detection is split from rendering so probes can be tested without a terminal. The tables
+in `lib/data/` go stale by nature: a live source always beats them, and a miss prints
+`unknown` rather than a guess.
 
-**The reference tables go stale.** `lib/data/*.tsv` each carry a refresh source, and
-`cpu-generations.tsv` carries a `Verified against vendor sites:` date — the day someone
-last compared it to Intel's and AMD's own pages, not the day the file was last edited.
+Hardware paths are tested against synthetic fixtures in `tests/fixtures/`, because the
+real SMBIOS tables are root-only and no machine here has switchable graphics, a degraded
+PCIe link, and an unauthorised Thunderbolt device at once.
 
-```bash
-make check-data     # compare the CPU generation table against ark.intel.com and amd.com
-```
-
-That script **reports; it does not rewrite**. Mapping a marketing name to a position in
-the release sequence is a judgement — Intel restarted its numbering at "Core Ultra
-Series 1" after 14th Gen, and AMD skips desktop series numbers — so it automates the
-mechanical part, which is noticing a generation the table has never heard of. It is not
-run in CI: a red build caused by a vendor's marketing page being down teaches people to
-ignore red builds. `cpu-generations.tsv` defines "latest" by its own highest ordinal, so
-adding a generation is one line and every "N behind" recalculates — nothing hardcodes the
-newest generation, and the failure mode of forgetting is an under-report that the named
-comparison basis makes visible. Neither is consulted where a live source exists: `SUPPORT_END=` beats the
-release table, and `/proc/cpuinfo` beats everything for what the CPU is. A row that cannot
-be confirmed is omitted rather than guessed — a blank is a gap, a wrong end-of-support
-date is a lie someone acts on.
-
-`devices.sh` deliberately breaks the one-line-per-probe rule: it prints one line per
-device, **or nothing**, because a container with no GPU and a machine whose GPU could not
-be named are different answers and `unknown` cannot express the first.
-
-The SMBIOS parser is tested against synthetic records in `tests/fixtures/dmi-entries`,
-and device enumeration against synthetic sysfs trees in `tests/fixtures/sysfs` — the real
-SMBIOS tables are mode `0400`, and no machine available here has switchable graphics, a
-down ethernet link, an unbound driver, a USB4 bus, and an unauthorised Thunderbolt device
-at once. Regenerate both with `make fixtures`.
-
-See [`SPEC.md`](SPEC.md) for the design and [`ROADMAP.md`](ROADMAP.md) for what is
-planned.
+See [`SPEC.md`](SPEC.md) for the design and the reasoning, [`ROADMAP.md`](ROADMAP.md) for
+what is planned, and [`docs/DECISIONS.md`](docs/DECISIONS.md) for why things are the way
+they are.
 
 ## Contributing
 
 See [`CONTRIBUTING.md`](CONTRIBUTING.md). Open an issue before starting anything large.
-Reports from distros outside the tested three are especially useful.
+Reports from distros outside the tested three are especially useful — as is a
+`sudo distrofetch` from a machine with more than one memory module.
 
 ## License
 

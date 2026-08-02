@@ -125,6 +125,17 @@ attached; install instructions verified by someone who is not me.
 
 ---
 
+## Repository chores
+
+Not features. Each is a setting someone has to click, and each is invisible until it
+bites.
+
+- [ ] Enable private vulnerability reporting — `SECURITY.md` links to it and the link is
+      dead until it is turned on
+- [ ] `gh repo edit --delete-branch-on-merge`; branches are being deleted by hand
+- [ ] Enable Discussions, or leave it off — the issue-template link to it was removed
+      because it 404'd
+
 ## Later
 
 <!-- Ideas that are not phases yet. No exit conditions, no commitment. Things get promoted

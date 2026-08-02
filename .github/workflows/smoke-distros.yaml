@@ -22,7 +22,11 @@ jobs:
   smoke:
     name: ${{ matrix.name }}
     runs-on: ubuntu-latest
-    container: ${{ matrix.image }}
+    # Floating tags are the point of this job. It exists to catch the day a distro
+    # update breaks a probe — pinning these to digests would mean testing against three
+    # snapshots that can never change, which is the opposite of what it is for. The
+    # images are official ones from Docker Hub and nothing built from them is published.
+    container: ${{ matrix.image }} # zizmor: ignore[unpinned-images]
     strategy:
       fail-fast: false
       matrix:
@@ -47,7 +51,11 @@ jobs:
         run: ${{ matrix.bootstrap }}
 
       # checkout needs git present, which is why bootstrap runs first.
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          # No job here pushes, so the checkout has no use for a token in
+          # .git/config where later steps — and anything they run — can read it.
+          persist-credentials: false
 
       - name: install
         run: make install PREFIX=/usr/local
@@ -192,7 +200,8 @@ jobs:
           # A MAC address is a durable unique identifier for the machine and this
           # output is designed to be posted. Check the real interfaces on this runner,
           # not a fixture: the unit tests cover the fixture.
-          for mac in $(cat /sys/class/net/*/address 2>/dev/null | sort -u); do
+          cat /sys/class/net/*/address 2>/dev/null | sort -u > /tmp/macs.txt || true
+          while IFS= read -r mac; do
             case "$mac" in
               00:00:00:00:00:00 | '') continue ;;
             esac
@@ -200,7 +209,7 @@ jobs:
               echo "a MAC address reached the output: $mac" >&2
               exit 1
             fi
-          done
+          done < /tmp/macs.txt
 
           # --- no hidden text -----------------------------------------------------
           # Values wrap; they are never truncated. An ellipsis in the output means a

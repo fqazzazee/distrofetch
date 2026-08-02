@@ -1,0 +1,116 @@
+name: Security
+
+# What this project can actually be attacked through, and what checks that.
+#
+# distrofetch has no dependencies, no network calls, and no credentials — so the usual
+# supply-chain surface is nearly empty. Two things are left, and this workflow covers
+# both:
+#
+#   The workflows themselves. They are the only code here that runs with a token, and
+#   the release job holds contents: write. zizmor audits them for the things that turn
+#   a workflow into a foothold: unpinned actions, persisted credentials, expression
+#   injection into run blocks. actionlint catches the rest, including shellcheck over
+#   every embedded script.
+#
+#   The repository contents. gitleaks scans history for credentials. The project handles
+#   none, which is exactly why an accidental one would go unnoticed.
+#
+# CodeQL is deliberately absent: it has no Bash analyser, so it would cost runtime and
+# find nothing. See docs/DECISIONS.md.
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+  schedule:
+    # Weekly, because a finding can appear without the code changing: an action gains a
+    # CVE, or a new audit ships. Monday morning UTC.
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+
+jobs:
+  workflows:
+    name: workflows
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+
+      # Pinned by digest, not tag: an audit tool that runs on every push is itself worth
+      # compromising, and pinning is the control this workflow exists to enforce.
+      - name: zizmor
+        run: |
+          set -euo pipefail
+          docker run --rm -v "$PWD:/repo:ro" \
+            ghcr.io/zizmorcore/zizmor:latest \
+            --no-progress --min-severity=low /repo/.github/workflows
+
+      - name: actionlint
+        run: |
+          set -euo pipefail
+          docker run --rm -v "$PWD:/repo:ro" -w /repo \
+            docker.io/rhysd/actionlint:latest -color
+
+  secrets:
+    name: secrets
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          # gitleaks scans history, so it needs the history.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: gitleaks
+        run: |
+          set -euo pipefail
+          docker run --rm -v "$PWD:/repo:ro" -w /repo \
+            ghcr.io/gitleaks/gitleaks:latest detect \
+            --source=/repo --redact --verbose --no-banner
+
+  permissions-audit:
+    name: permissions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+
+      # A workflow with no `permissions:` block inherits whatever the repository default
+      # is, which is not visible in the file and can be widened without any commit. Every
+      # workflow here declares its own, and this keeps it that way.
+      - name: every workflow declares its permissions
+        run: |
+          set -euo pipefail
+          missing=0
+          for f in .github/workflows/*.yaml; do
+            if ! grep -qE '^permissions:' "$f"; then
+              echo "$f has no top-level permissions block" >&2
+              missing=1
+            fi
+          done
+          [ "$missing" -eq 0 ] || exit 1
+          echo "all workflows declare permissions"
+
+      # The one job that can write to the repository is the release. Anything else
+      # gaining write access should be a deliberate, reviewed change rather than a
+      # line that slipped in.
+      - name: only the release job holds write access
+        run: |
+          set -euo pipefail
+          writers="$(grep -rlE '^ *contents: write' .github/workflows/ || true)"
+          if [ "$writers" != ".github/workflows/release.yaml" ] && [ -n "$writers" ]; then
+            echo "unexpected workflow with contents: write:" >&2
+            echo "$writers" >&2
+            exit 1
+          fi
+          echo "write access is confined to the release workflow"

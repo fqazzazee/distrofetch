@@ -20,9 +20,12 @@ jobs:
     permissions:
       contents: write # create the release and upload assets
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           fetch-depth: 0 # release notes are generated from history
+          # This is the one job with contents: write. The release is published with an
+          # explicit token below rather than whatever checkout left in .git/config.
+          persist-credentials: false
 
       - name: verify tag matches DISTROFETCH_VERSION
         run: |
@@ -37,9 +40,17 @@ jobs:
       - name: build artifacts
         run: make dist
 
-      - uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            dist/*.tar.gz
-            dist/*.sha256
-          generate_release_notes: true
+      # `gh release` rather than a third-party action. This job is the only one in the
+      # repository that holds a write token, so it is the one place where a supply-chain
+      # compromise would cost something — and gh is already on the runner, so the action
+      # was buying nothing but an extra dependency in exactly the wrong job.
+      - name: publish release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh release create "$GITHUB_REF_NAME" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes \
+            dist/*.tar.gz dist/*.sha256

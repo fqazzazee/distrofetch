@@ -1,0 +1,25 @@
+version: 2
+
+# distrofetch has no runtime dependencies, so there is exactly one thing here to keep
+# current: the actions the workflows call. Those are pinned to commit hashes, which
+# stops a tag being moved under us but also means nothing updates without a commit —
+# including a security fix. Dependabot is what closes that gap, and it opens the update
+# as a reviewable pull request rather than changing anything on its own.
+
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: ci
+    labels:
+      - dependencies
+    groups:
+      # One pull request for routine bumps rather than four. Majors stay separate,
+      # because a major is a behaviour change that deserves reading on its own.
+      actions-minor:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]

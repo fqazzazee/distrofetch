@@ -288,6 +288,7 @@ be skipped without touching detection.
 | `lib/logos/*.txt` | One ASCII logo per distribution, plus a generic fallback |
 | `Makefile` | lint / fmt / test / dist / install — the same targets CI runs |
 | `tests/*.bats` | CLI contract, layout alignment, SMBIOS parsing, table lookups |
+| `scripts/` | Maintenance tools run by hand, not by CI |
 | `tests/fixtures/` | Synthetic SMBIOS records, DMI id files, and sysfs trees |
 
 `devices.sh` is separate from `detect.sh` because it breaks that module's contract
