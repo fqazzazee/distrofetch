@@ -7,6 +7,7 @@ ASCII.
 [![CI](https://github.com/fqazzazee/distrofetch/actions/workflows/ci.yaml/badge.svg)](https://github.com/fqazzazee/distrofetch/actions/workflows/ci.yaml)
 [![Smoke test (distros)](https://github.com/fqazzazee/distrofetch/actions/workflows/smoke-distros.yaml/badge.svg)](https://github.com/fqazzazee/distrofetch/actions/workflows/smoke-distros.yaml)
 [![Security](https://github.com/fqazzazee/distrofetch/actions/workflows/security.yaml/badge.svg)](https://github.com/fqazzazee/distrofetch/actions/workflows/security.yaml)
+[![Buy me a coffee](https://img.shields.io/badge/Buy%20me%20a%20coffee-FFDD00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/fqazzazee)
 
 ```console
 $ distrofetch
@@ -214,6 +215,10 @@ they are.
 See [`CONTRIBUTING.md`](CONTRIBUTING.md). Open an issue before starting anything large.
 Reports from distros outside the tested three are especially useful — as is a
 `sudo distrofetch` from a machine with more than one memory module.
+
+## Support
+
+If distrofetch helped you get to know your machine, you can [buy me a coffee ☕](https://buymeacoffee.com/fqazzazee).
 
 ## License
 
